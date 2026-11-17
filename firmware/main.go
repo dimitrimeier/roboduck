@@ -9,9 +9,23 @@ import (
 
 const (
 	protocolVersion = "1"
-	firmwareVersion = "0.3.0"
+	firmwareVersion = "0.4.0"
 	lineBufferSize  = 96
 	hostTimeout     = 15 * time.Second
+	batteryADCMax   = 65520
+	batteryADCMV    = 3000
+	startupColorOn  = 600 * time.Millisecond
+	startupColorOff = 200 * time.Millisecond
+	batteryBlinkOn  = 600 * time.Millisecond
+	batteryBlinkOff = 600 * time.Millisecond
+	connectFlashOn  = 120 * time.Millisecond
+	connectFlashOff = 120 * time.Millisecond
+	usbThresholdMV  = 4400
+	batteryThird1MV = 3600
+	batteryThird2MV = 3900
+	// The real board reported 4295 mV while a multimeter measured 4230 mV.
+	supplyCalibrationNumerator   = 4230
+	supplyCalibrationDenominator = 4295
 )
 
 type responseWriter func(string)
@@ -25,6 +39,40 @@ const (
 	stateRunning
 	stateAsking
 	stateError
+)
+
+type displayPhase uint8
+
+const (
+	phaseStartupColors displayPhase = iota
+	phaseBatteryLevel
+	phaseConnecting
+	phaseConnectionConfirmed
+	phaseStatus
+)
+
+type batteryLevel uint8
+
+const (
+	batteryLow batteryLevel = iota
+	batteryMedium
+	batteryHigh
+	batteryUnknownUSB
+)
+
+type rgbColor struct {
+	red   uint8
+	green uint8
+	blue  uint8
+}
+
+var (
+	colorOff    = rgbColor{}
+	colorRed    = rgbColor{red: 255}
+	colorYellow = rgbColor{red: 255, green: 128}
+	colorGreen  = rgbColor{green: 255}
+	colorBlue   = rgbColor{blue: 255}
+	colorWhite  = rgbColor{red: 255, green: 255, blue: 255}
 )
 
 type ledRenderer struct {
@@ -59,14 +107,29 @@ func (renderer *ledRenderer) write(level uint8) {
 	renderer.pwm.Set(renderer.channel, scaled)
 }
 
-func (renderer *ledRenderer) render(state displayState, now time.Duration) {
+// renderRGB simulates both future RGB eyes on the existing one-color board LED.
+// The brightest RGB channel is rendered; DISPLAY exposes the actual RGB values.
+func (renderer *ledRenderer) renderRGB(color rgbColor) {
+	level := color.red
+	if color.green > level {
+		level = color.green
+	}
+	if color.blue > level {
+		level = color.blue
+	}
+	renderer.write(level)
+}
+
+func renderStatus(state displayState, now time.Duration) rgbColor {
+	// TODO: Define the status colors together with the final RGB behavior.
+	// Until then, preserve the existing one-color animation patterns.
 	switch state {
 	case stateOff:
-		renderer.write(0)
+		return colorOff
 	case stateIdle:
-		renderer.write(24)
+		return scaleColor(colorWhite, 24)
 	case stateFinished:
-		renderer.write(255)
+		return colorWhite
 	case stateRunning:
 		const period = 1600 * time.Millisecond
 		const halfPeriod = period / 2
@@ -76,27 +139,40 @@ func (renderer *ledRenderer) render(state displayState, now time.Duration) {
 			triangle = period - phase
 		}
 		level := 32 + uint8(223*triangle/halfPeriod)
-		renderer.write(level)
+		return scaleColor(colorWhite, level)
 	case stateAsking:
 		phase := now % time.Second
 		on := phase < 120*time.Millisecond || (phase >= 220*time.Millisecond && phase < 340*time.Millisecond)
 		if on {
-			renderer.write(255)
-		} else {
-			renderer.write(0)
+			return colorWhite
 		}
+		return colorOff
 	case stateError:
 		if now%(300*time.Millisecond) < 150*time.Millisecond {
-			renderer.write(255)
-		} else {
-			renderer.write(0)
+			return colorWhite
 		}
+		return colorOff
+	}
+	return colorOff
+}
+
+func scaleColor(color rgbColor, level uint8) rgbColor {
+	return rgbColor{
+		red:   uint8(uint16(color.red) * uint16(level) / 255),
+		green: uint8(uint16(color.green) * uint16(level) / 255),
+		blue:  uint8(uint16(color.blue) * uint16(level) / 255),
 	}
 }
 
 type controller struct {
 	renderer       *ledRenderer
+	battery        *machine.ADC
+	supply         *machine.ADC
 	state          displayState
+	phase          displayPhase
+	phaseStarted   time.Time
+	batteryLevel   batteryLevel
+	supplyMV       uint32
 	serialReceiver lineReceiver
 	bleReceiver    lineReceiver
 	bleTX          bluetoothCharacteristic
@@ -173,7 +249,7 @@ func (device *controller) processLine(line string, now time.Time, writer respons
 			writer("ERROR PROTOCOL_VERSION")
 			return
 		}
-		device.touch(now)
+		device.connect(now)
 		writer("DEVICE OPENCODE_STATUS protocol=" + protocolVersion + " firmware=" + firmwareVersion + " leds=1")
 
 	case "RESET_STATE":
@@ -233,8 +309,53 @@ func (device *controller) processLine(line string, now time.Time, writer respons
 		device.touch(now)
 		writer("PONG")
 
+	case "BATTERY":
+		if len(fields) != 1 {
+			writer("ERROR BAD_ARGUMENTS")
+			return
+		}
+		raw := uint32(device.battery.Get())
+		adcMV := (raw*batteryADCMV + batteryADCMax/2) / batteryADCMax
+		// A canonical nice!nano uses 800 kOhm over 2 MOhm. The resulting
+		// divider factor is 5/7, so the source voltage is ADC * 7/5.
+		sourceMV := (adcMV*7 + 2) / 5
+		writer("BATTERY raw=" + strconv.FormatUint(uint64(raw), 10) +
+			" adc_mv=" + strconv.FormatUint(uint64(adcMV), 10) +
+			" source_mv=" + strconv.FormatUint(uint64(sourceMV), 10))
+
+	case "SUPPLY":
+		if len(fields) != 1 {
+			writer("ERROR BAD_ARGUMENTS")
+			return
+		}
+		raw, adcMV, supplyMV := device.readSupply()
+		writer("SUPPLY raw=" + strconv.FormatUint(uint64(raw), 10) +
+			" adc_mv=" + strconv.FormatUint(uint64(adcMV), 10) +
+			" supply_mv=" + strconv.FormatUint(uint64(supplyMV), 10))
+
+	case "DISPLAY":
+		if len(fields) != 1 {
+			writer("ERROR BAD_ARGUMENTS")
+			return
+		}
+		color := device.displayColor(now)
+		writer("DISPLAY phase=" + device.phase.String() +
+			" battery=" + device.batteryLevel.String() +
+			" supply_mv=" + strconv.FormatUint(uint64(device.supplyMV), 10) +
+			" rgb=" + strconv.FormatUint(uint64(color.red), 10) + "," +
+			strconv.FormatUint(uint64(color.green), 10) + "," +
+			strconv.FormatUint(uint64(color.blue), 10))
+
 	default:
 		writer("ERROR UNKNOWN_COMMAND")
+	}
+}
+
+func (device *controller) connect(now time.Time) {
+	device.touch(now)
+	if device.phase == phaseConnecting {
+		device.phase = phaseConnectionConfirmed
+		device.phaseStarted = now
 	}
 }
 
@@ -247,6 +368,149 @@ func (device *controller) expireHost(now time.Time) {
 	if device.linked && now.Sub(device.lastSeen) >= hostTimeout {
 		device.linked = false
 		device.state = stateOff
+		device.phase = phaseConnecting
+		device.phaseStarted = now
+	}
+}
+
+func (device *controller) updateDisplay(now time.Time) {
+	startupStep := startupColorOn + startupColorOff
+	startupDuration := 3 * startupStep
+	batteryStep := batteryBlinkOn + batteryBlinkOff
+	batteryDuration := 3 * batteryStep
+	confirmationStep := connectFlashOn + connectFlashOff
+	confirmationDuration := 3 * confirmationStep
+
+	switch device.phase {
+	case phaseStartupColors:
+		if now.Sub(device.phaseStarted) >= startupDuration {
+			device.phase = phaseBatteryLevel
+			device.phaseStarted = device.phaseStarted.Add(startupDuration)
+		}
+	case phaseBatteryLevel:
+		if now.Sub(device.phaseStarted) >= batteryDuration {
+			if device.linked {
+				device.phase = phaseConnectionConfirmed
+			} else {
+				device.phase = phaseConnecting
+			}
+			device.phaseStarted = now
+		}
+	case phaseConnectionConfirmed:
+		if now.Sub(device.phaseStarted) >= confirmationDuration {
+			device.phase = phaseStatus
+			device.phaseStarted = now
+		}
+	}
+
+	device.renderer.renderRGB(device.displayColor(now))
+}
+
+func (device *controller) displayColor(now time.Time) rgbColor {
+	elapsed := now.Sub(device.phaseStarted)
+	switch device.phase {
+	case phaseStartupColors:
+		step := startupColorOn + startupColorOff
+		if elapsed%step >= startupColorOn {
+			return colorOff
+		}
+		switch elapsed / step {
+		case 0:
+			return colorRed
+		case 1:
+			return colorYellow
+		default:
+			return colorGreen
+		}
+	case phaseBatteryLevel:
+		if elapsed%(batteryBlinkOn+batteryBlinkOff) >= batteryBlinkOn {
+			return colorOff
+		}
+		return device.batteryLevel.color()
+	case phaseConnecting:
+		return scaleColor(colorBlue, pulseLevel(elapsed))
+	case phaseConnectionConfirmed:
+		if elapsed%(connectFlashOn+connectFlashOff) < connectFlashOn {
+			return colorBlue
+		}
+		return colorOff
+	case phaseStatus:
+		return renderStatus(device.state, elapsed)
+	default:
+		return colorOff
+	}
+}
+
+func pulseLevel(elapsed time.Duration) uint8 {
+	const period = 1600 * time.Millisecond
+	const halfPeriod = period / 2
+	phase := elapsed % period
+	triangle := phase
+	if phase >= halfPeriod {
+		triangle = period - phase
+	}
+	return 24 + uint8(231*triangle/halfPeriod)
+}
+
+func (device *controller) readSupply() (raw uint32, adcMV uint32, supplyMV uint32) {
+	raw = uint32(device.supply.Get())
+	adcMV = (raw*batteryADCMV + batteryADCMax/2) / batteryADCMax
+	// The nRF52840 exposes VDDH internally divided by five as an SAADC input.
+	uncalibratedMV := adcMV * 5
+	supplyMV = (uncalibratedMV*supplyCalibrationNumerator + supplyCalibrationDenominator/2) /
+		supplyCalibrationDenominator
+	return
+}
+
+func classifyBattery(supplyMV uint32) batteryLevel {
+	switch {
+	case supplyMV > usbThresholdMV:
+		return batteryUnknownUSB
+	case supplyMV < batteryThird1MV:
+		return batteryLow
+	case supplyMV < batteryThird2MV:
+		return batteryMedium
+	default:
+		return batteryHigh
+	}
+}
+
+func (level batteryLevel) color() rgbColor {
+	switch level {
+	case batteryLow:
+		return colorRed
+	case batteryHigh:
+		return colorGreen
+	default:
+		return colorYellow
+	}
+}
+
+func (level batteryLevel) String() string {
+	switch level {
+	case batteryLow:
+		return "LOW"
+	case batteryMedium:
+		return "MEDIUM"
+	case batteryHigh:
+		return "HIGH"
+	default:
+		return "UNKNOWN_USB"
+	}
+}
+
+func (phase displayPhase) String() string {
+	switch phase {
+	case phaseStartupColors:
+		return "STARTUP_COLORS"
+	case phaseBatteryLevel:
+		return "BATTERY"
+	case phaseConnecting:
+		return "CONNECTING"
+	case phaseConnectionConfirmed:
+		return "CONNECTED"
+	default:
+		return "STATUS"
 	}
 }
 
@@ -286,19 +550,35 @@ func main() {
 		}
 	}
 
+	machine.InitADC()
+	battery := machine.ADC{Pin: machine.AIN2}
+	// Pin 254 is TinyGo's nRF52840-specific internal VDDH/5 ADC input.
+	supply := machine.ADC{Pin: machine.Pin(254)}
+	battery.Configure(machine.ADCConfig{
+		Reference:  3000,
+		Resolution: 12,
+		SampleTime: 40,
+		Samples:    16,
+	})
+
 	device := controller{
 		renderer: renderer,
+		battery:  &battery,
+		supply:   &supply,
 		state:    stateOff,
+		phase:    phaseStartupColors,
 	}
+	device.phaseStarted = time.Now()
+	_, _, device.supplyMV = device.readSupply()
+	device.batteryLevel = classifyBattery(device.supplyMV)
 	_ = device.enableBluetooth()
-	startedAt := time.Now()
 	for {
 		now := time.Now()
 		device.readSerial()
 		device.readBluetooth()
 		device.flushBluetooth(now)
 		device.expireHost(now)
-		device.renderer.render(device.state, now.Sub(startedAt))
+		device.updateDisplay(now)
 		time.Sleep(time.Millisecond)
 	}
 }

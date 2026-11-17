@@ -178,3 +178,53 @@ das Backup warm, ein Koordinator erlaubt aber immer nur einem Kanal
 Statusbefehle. Der reale Test mit Firmware 0.3.0 bestätigte USB `active`, BLE
 `standby`, die Aktivierung von BLE nach kontrolliertem USB-Fehler und den
 automatischen Wechsel zurück zu USB nach Reconnect.
+
+## 2026-11-16 – Akkuspannung über internen VDDH-Kanal
+
+**Status:** Angenommen
+
+Auf dem geprüften nice!nano-kompatiblen Clone wird die Versorgungsspannung über
+den internen nRF52840-SAADC-Eingang `VDDH/5` gemessen. Der Diagnosebefehl
+`SUPPLY` liefert ADC-Rohwert, Spannung am internen Eingang und kalibrierte
+Versorgungsspannung. Der board-spezifische Faktor `4230/4295` korrigiert die
+unkalibrierten 4,295 V auf die gleichzeitig per Multimeter gemessenen 4,230 V.
+Der beim originalen nice!nano erwartete Akku-Spannungsteiler an `P0.04` wird auf
+diesem Clone nicht zur Ladezustandsbestimmung verwendet.
+
+**Begründung:** Reale Tests ergaben für `P0.04` auch im Akkubetrieb nur ungefähr
+0,5 V. `VDDH/5` unterschied dagegen USB mit etwa 4,91 V zuverlässig vom Akku
+mit unkalibriert 4,295 V. Nach der Kalibrierung meldeten drei BLE-Abfragen im
+reinen Akkubetrieb 4,220 V, 4,230 V und 4,230 V bei einer Multimeterreferenz von
+4,230 V. Damit ist eine grobe Ladezustandsschätzung ohne zusätzliche
+Verdrahtung möglich. Prozentstufen und Hysterese werden getrennt festgelegt und
+dürfen nicht als präzise Kapazitätsmessung verstanden werden.
+
+## 2026-11-16 – Zwei getrennt verdrahtete RGB-Augen
+
+**Status:** Vorläufig angenommen
+
+Zwei 4-Pin-RGB-LEDs mit gemeinsamer Kathode werden als Augen verwendet. Die
+Firmware spiegelt ihre Ausgabe zunächst, die spätere Verdrahtung reserviert aber
+Rot, Grün und Blau je Auge separat. Damit bleiben beide Augen später unabhängig
+steuerbar. Jeder der sechs Kanäle erhält einen eigenen Vorwiderstand.
+
+**Begründung:** Gemeinsam verdrahtete Farbkanäle würden GPIOs sparen, eine
+spätere unabhängige Darstellung aber nur durch Neuverdrahtung ermöglichen.
+Konkrete Pins, Widerstände und Treiber hängen noch von Durchlassspannung und
+gewünschtem Kanalstrom der LEDs ab.
+
+## 2026-11-16 – Start- und Verbindungsanzeige in der Firmware
+
+**Status:** Angenommen
+
+Vor dem Hoststatus zeigt die Firmware einen RGB-Funktionstest, danach dreimal
+das gemessene Akkudrittel und anschließend bis zum Handshake ein blaues Pulsieren.
+Ein gültiger USB- oder BLE-Handshake wird mit drei kurzen blauen Blinkern
+bestätigt. Die Drittelgrenzen sind vorläufig 3,60 V und 3,90 V; eine erkannte
+USB-Versorgung über 4,40 V wird gelb als „Akkustand unbekannt“ dargestellt. Bei
+Host-Timeout kehrt die Anzeige in die Verbindungssuche zurück.
+
+**Begründung:** Die Firmware kennt Boot, lokale Versorgung und
+Transportaktivität unmittelbar und kann diese Phasen ohne Hostverbindung
+anzeigen. Der Host bleibt weiterhin alleinige Quelle des nachfolgenden
+OpenCode-Status. Die Statusfarben selbst werden später festgelegt.

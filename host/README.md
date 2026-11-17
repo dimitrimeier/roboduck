@@ -194,10 +194,11 @@ Adapter oder die Zustandsmaschine mit Hardwaredetails zu koppeln.
 
 ## Manueller Bluetooth-Test
 
-1. Firmware 0.3.0 starten; USB darf dabei nur als Stromversorgung dienen.
+1. Firmware 0.3.3 oder neuer starten; USB darf dabei nur als Stromversorgung
+   dienen.
 2. Im Hostordner `npm run dev:bluetooth` starten.
-3. Auf `bluetooth_connected` mit Firmware `0.3.0` achten. Es darf in diesem Lauf
-   kein `serial_connected` erscheinen.
+3. Auf `bluetooth_connected` mit der erwarteten Firmwareversion achten. Es darf
+   in diesem Lauf kein `serial_connected` erscheinen.
 4. Eine OpenCode-Aufgabe und eine Rückfrage starten; `RUNNING`, `ASKING` und
    `FINISHED` an der roten LED prüfen.
 5. Für einen vollständig kabellosen Test das Board nur dann von USB trennen,
