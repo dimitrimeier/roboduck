@@ -1,0 +1,28 @@
+# Dependencies and build output
+node_modules/
+dist/
+build/
+.pio/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+config.local.*
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Firmware artifacts
+*.bin
+*.elf
+*.hex
+*.uf2
