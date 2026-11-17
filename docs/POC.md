@@ -1,235 +1,130 @@
-# Proof-of-Concept-Plan
+# Proof-of-concept plan
 
-## Ziel
+## Goal
 
-Vor Kauf, Verkabelung oder Verlöten der finalen Anzeige werden die kritischen
-Annahmen einzeln geprüft:
+Validate the critical assumptions before final hardware is purchased or
+soldered:
 
-1. OpenCode liefert die benötigten Zustandsinformationen zuverlässig.
-2. Mehrere Sessions lassen sich in ein eindeutiges Anzeigemodell überführen.
-3. Ein Windows-Programm erkennt das richtige USB-Serial-Gerät automatisch.
-4. Reconnect und vollständige Synchronisation funktionieren.
-5. Die gesamte Kette bleibt über mehrere Stunden stabil.
+1. OpenCode exposes the required state reliably.
+2. Multiple sessions can be reduced to an unambiguous display state.
+3. The host can safely discover the correct USB serial device.
+4. Reconnect and full synchronization work.
+5. The complete chain remains stable for several hours.
 
-Der PoC soll keine fertige Oberfläche, Installation oder schöne Hardware sein.
-Wegwerfcode ist erlaubt, solange Ergebnisse und Abweichungen dokumentiert
-werden. Wiederverwendbare Teile dürfen später in `host/` bzw. `firmware/`
-übernommen werden.
+The PoC is not expected to provide a polished UI, installer, or enclosure.
+Reusable work may move into `host/` and `firmware/`.
 
-## Grundsatz
+## Principle
 
-Jede Stufe isoliert möglichst nur ein Risiko. Erst wenn eine Stufe ihre
-Abnahmekriterien erfüllt, wird die nächste begonnen. Externe LEDs werden für den
-PoC nicht verlötet; die eingebaute LED eines Entwicklungsboards reicht für den
-End-to-End-Nachweis.
+Each stage should isolate one risk. Do not proceed until its acceptance criteria
+are sufficiently met. A development board's built-in or directly connected LED
+is enough for end-to-end validation.
 
-## PoC 1 – OpenCode-Beobachter ohne Hardware
+## PoC 1 — OpenCode observer without hardware
 
-### Fragestellung
+**Question:** Can the required states be obtained from the local OpenCode
+service without parsing logs or terminal output?
 
-Können wir die benötigten Zustände über den lokalen OpenCode-Service erkennen,
-ohne Logs oder TUI-Ausgaben zu parsen?
+**Setup:** A small TypeScript console application using `@opencode/client`. It
+loads active sessions and records only timestamps, session IDs, event types, and
+derived states. It must not log prompts or file contents.
 
-### Aufbau
+**Tests:** normal completion, question/form, permission request, interruption,
+controlled failure, concurrent sessions, and event-stream reconnect.
 
-- Kleines TypeScript-Konsolenprogramm.
-- Verbindung über `@opencode/client` und `@opencode/client/service`.
-- Beim Start aktive Sessions auslesen.
-- Relevante Events mit Zeitstempel, Session-ID und Eventtyp ausgeben.
-- Keine Prompt-Inhalte oder Dateiinhalte protokollieren.
+**Acceptance criteria:**
 
-### Tests
+- [ ] Start, completion, failure/interruption, and idle are unambiguous.
+- [ ] Questions/forms and permission requests are unambiguous.
+- [ ] Events can be assigned safely to sessions.
+- [ ] Active state can be reconstructed after startup and reconnect.
 
-- Eine normale Aufgabe starten und erfolgreich beenden.
-- Eine Aufgabe erzeugen, die eine Frage oder ein Formular stellt.
-- Eine Berechtigungsanfrage auslösen.
-- Eine Ausführung unterbrechen.
-- Wenn kontrolliert möglich, einen Fehlerfall auslösen.
-- Zwei Sessions gleichzeitig ausführen.
-- OpenCode-Event-Verbindung trennen und erneut aufbauen.
+**Go:** all MVP states can be derived. **Adjust:** reduce the display model or
+document a fallback for missing signals. **No-go:** state requires unreliable
+parsing of terminal text or private content.
 
-### Abnahmekriterien
+## PoC 2 — State machine without hardware
 
-- [ ] Start, Abschluss, Fehler/Unterbrechung und Idle sind eindeutig erkennbar.
-- [ ] Frage/Formular und Berechtigungsanfrage sind eindeutig erkennbar.
-- [ ] Events können sicher einer Session zugeordnet werden.
-- [ ] Aktive Sessions lassen sich nach Programmstart wiederherstellen.
-- [ ] Nach Reconnect kann der Zustand ohne verpasste Events neu aufgebaut werden.
+Use a pure reducer and synthetic event sequences. Cover:
 
-### Go/No-Go
-
-**Go:** Alle für das MVP nötigen Zustände sind über API und Events ableitbar.
-
-**Anpassen:** Falls einzelne Zustände fehlen, wird das MVP-Farbschema reduziert
-oder eine dokumentierte Ersatzregel verwendet.
-
-**No-Go:** Der aktive Zustand lässt sich nur durch unzuverlässiges Parsen von
-Terminaltext oder privaten Daten ableiten.
-
-## PoC 2 – Zustandsmaschine ohne Hardware
-
-### Fragestellung
-
-Erzeugt dieselbe Eventfolge immer denselben LED-Zustand, auch bei mehreren
-Sessions und verspäteten Ereignissen?
-
-### Aufbau
-
-- Reiner Zustands-Reducer ohne OpenCode- oder Serial-Abhängigkeit.
-- Synthetische Eventfolgen als automatisierte Tests.
-- Optional anonymisierte Eventtypen und Zeitstempel aus PoC 1 als Fixtures.
-
-### Tests
-
-- `RUNNING → FINISHED → IDLE` mit Ablaufzeit für `FINISHED`.
+- `RUNNING → FINISHED → IDLE` and the `FINISHED` timeout.
 - `RUNNING → ASKING → RUNNING → FINISHED`.
-- Fehler und Unterbrechung.
-- Zwei oder mehr Sessions mit der Prioritätsregel.
-- Gelöschte oder archivierte Session.
-- Doppeltes, unbekanntes oder in anderer Reihenfolge eintreffendes Event.
-- Vollständiger Snapshot ersetzt veralteten lokalen Zustand.
+- Failure and interruption.
+- Concurrent sessions and aggregate priority.
+- Deleted or archived sessions.
+- Duplicate, unknown, late, and reordered events.
+- Replacement of stale local state by a complete snapshot.
 
-### Abnahmekriterien
+**Acceptance criteria:**
 
-- [ ] Tests decken alle MVP-Zustände ab.
-- [ ] Prioritäten sind deterministisch.
-- [ ] Ein vollständiger Snapshot stellt den korrekten Zustand wieder her.
-- [ ] Unbekannte Events führen weder zu einem Absturz noch zu falschem Alarm.
+- [ ] Every MVP state and priority is covered deterministically.
+- [ ] A complete snapshot restores the correct state.
+- [ ] Unknown events neither crash the host nor cause a false alarm.
 
-## PoC 3 – Serial-Protokoll simulieren
+## PoC 3 — Simulated serial protocol
 
-### Fragestellung
+Keep serial transport behind an interface and use an in-memory fake that can
+delay, drop, or reject responses. Cover accepted and rejected handshakes,
+protocol mismatch, timeout, reset plus full snapshot, interruption during sync,
+missing `PONG`, and reconnect.
 
-Funktionieren Handshake, Timeouts und vollständige Synchronisation unabhängig
-von echter Hardware?
+**Acceptance criteria:**
 
-### Aufbau
+- [ ] Unrelated or incompatible devices are rejected.
+- [ ] Timeout and reconnect do not block the application.
+- [ ] Every connection receives a complete snapshot.
+- [ ] Disconnect does not leave misleading host state.
 
-- Serial-Transport hinter einer kleinen Schnittstelle kapseln.
-- Zunächst ein In-Memory-Testgerät verwenden.
-- Das Testgerät kann Antworten verzögern, verwerfen oder Fehler liefern.
+## PoC 4 — Physical USB microcontroller
 
-Ein virtueller Windows-COM-Port ist optional. Er ist nicht erforderlich, wenn
-dafür zusätzliche Treiber mit administrativen Rechten installiert werden
-müssten. Die echte USB-Schicht wird in PoC 4 geprüft.
+Use minimal firmware with handshake, reset, `SET`, `PING`, and an LED. Enumerate
+ports with `serialport`, pre-filter by USB metadata, and require the handshake.
 
-### Tests
+Test connection after host startup, unplug/replug, firmware restart, host restart,
+an unrelated or non-responsive port where safe, and a port held by another
+application.
 
-- Erfolgreicher und abgelehnter Handshake.
-- Falsche Protokollversion.
-- Handshake-Timeout.
-- `RESET_STATE` gefolgt von vollständigem Snapshot.
-- Abbruch mitten in der Synchronisation.
-- Fehlendes `PONG`.
-- Wiederverbindung mit erneutem vollständigem Snapshot.
+**Acceptance criteria:**
 
-### Abnahmekriterien
+- [x] The correct device is found without a hard-coded COM port.
+- [x] An unrelated device receives no status commands.
+- [x] Reconnect performs reset plus full synchronization.
+- [ ] A blocked port causes no crash and is retried later.
+- [x] A physical LED shows at least `RUNNING`, `ASKING`, and `FINISHED`.
 
-- [ ] Fremde oder inkompatible Geräte werden abgewiesen.
-- [ ] Timeout und Reconnect blockieren das Programm nicht.
-- [ ] Nach jeder Verbindung wird ein vollständiger Snapshot gesendet.
-- [ ] Ein Verbindungsabbruch hinterlässt keinen irreführenden Host-Zustand.
-
-## PoC 4 – Lötfreier USB-Mikrocontroller-Test
-
-### Voraussetzung
-
-Ein Entwicklungsboard mit USB und möglichst eingebauter LED, beispielsweise ein
-Raspberry Pi Pico/Pico 2 oder ein Arduino-kompatibles Board. Es werden keine
-externen LEDs benötigt.
-
-### Fragestellung
-
-Kann Windows das reale Gerät automatisch erkennen und nach Abziehen, Neustart
-oder wechselnder COM-Port-Nummer wieder verbinden?
-
-### Aufbau
-
-- Minimale Firmware für Handshake, Reset, `SET`, `PING` und Board-LED.
-- Hostscan über `serialport`.
-- Vorfilterung anhand verfügbarer USB-Metadaten.
-- Finale Bestätigung ausschließlich per Handshake.
-
-### Tests
-
-- Gerät erst nach Start der Host-Anwendung einstecken.
-- Gerät während des Betriebs abziehen und erneut einstecken.
-- Mikrocontroller neu starten.
-- Host-Anwendung neu starten, während das Gerät verbunden bleibt.
-- Einen fremden oder nicht antwortenden COM-Port bereitstellen, sofern möglich.
-- Arduino Serial Monitor bzw. anderes Programm blockiert den Port.
-
-### Abnahmekriterien
-
-- [x] Das richtige Gerät wird ohne fest codierte COM-Nummer erkannt.
-- [x] Ein fremdes Gerät erhält keine Zustandsbefehle.
-- [x] Nach Reconnect erfolgt Reset plus vollständiger Snapshot.
-- [ ] Ein blockierter Port verursacht keinen Absturz und wird später erneut geprüft.
-- [x] Die Board-LED reagiert auf mindestens `RUNNING`, `ASKING` und `FINISHED`.
-
-## PoC 5 – End-to-End und Langzeittest
-
-### Fragestellung
-
-Funktioniert die Kette OpenCode → Hostzustand → USB → Firmware im realistischen
-mehrstündigen Betrieb?
-
-### Aufbau
+## PoC 5 — End-to-end and endurance
 
 ```text
-OpenCode-Service
-  → PoC-Host Bridge
-  → USB-Serial
-  → Mikrocontroller mit eingebauter LED
+OpenCode service → host bridge → USB/BLE → microcontroller → RGB LED
 ```
 
-### Tests
+Test a real session, concurrent sessions, microcontroller reconnect during work,
+OpenCode reconnect, and at least two hours of operation. Where practical, test
+Windows lock, standby, and resume.
 
-- Reale OpenCode-Session starten, fragen lassen und beenden.
-- Zwei Sessions parallel betreiben und Gesamtpriorität beobachten.
-- Mikrocontroller während einer laufenden Session neu verbinden.
-- OpenCode-Service bzw. Eventverbindung neu verbinden.
-- Mindestens zwei Stunden laufen lassen.
-- Wenn praktikabel: Windows sperren sowie Standby/Aufwachen testen.
+**Acceptance criteria:**
 
-### Abnahmekriterien
+- [ ] Display state remains correct throughout the test matrix.
+- [ ] Normal reconnect never requires a manual restart.
+- [ ] Missed events or board restarts never leave a permanently stale display.
+- [ ] Logs and resource use remain bounded.
+- [ ] Two hours pass without an unhandled failure.
 
-- [ ] Anzeige entspricht während der Tests dem erwarteten Gesamtzustand.
-- [ ] Kein manueller Neustart nach normalem Reconnect nötig.
-- [ ] Keine dauerhaft falsche Anzeige nach verpassten Events oder Board-Neustart.
-- [ ] Keine unkontrolliert wachsenden Logs oder auffällige Ressourcennutzung.
-- [ ] Zwei Stunden Betrieb ohne unbehandelten Absturz.
+## Final decision
 
-## Abschlussentscheidung
+After PoC 5, record **Go**, **Go with changes**, or **No-go** in
+`DECISIONS.md`. Before final soldering, board metadata, LED electrical design,
+display model, status colors, reconnect behavior, and the endurance result must
+be known.
 
-Nach PoC 5 wird in `DECISIONS.md` eine der folgenden Entscheidungen erfasst:
-
-- **Go:** Architektur beibehalten und finale Hardware planen.
-- **Go mit Änderungen:** Erkannte Grenzen dokumentieren und Architektur bzw.
-  MVP-Umfang anpassen.
-- **No-Go:** Blocker und getestete Alternativen festhalten; keine finale Hardware
-  aufbauen.
-
-Vor dem Löten sollten mindestens folgende Punkte entschieden sein:
-
-- Board und verfügbare USB-Metadaten.
-- LED-Typ, Anzahl, Stromversorgung und maximale Helligkeit.
-- Gesamtstatus oder Einzelanzeige pro Session.
-- Bestätigtes Zustands- und Farbschema.
-- Erfolgreicher USB-Reconnect und End-to-End-Langzeittest.
-
-## Ergebnisprotokoll je PoC
-
-Für jede Stufe wird am Ende ein kurzer Eintrag in `PROGRESS.md` ergänzt:
+Record each stage in `PROGRESS.md` using:
 
 ```text
-Datum:
-PoC-Stufe:
-Ergebnis: bestanden | teilweise bestanden | blockiert
-Getestete Umgebung:
-Beobachtungen:
-Abweichungen vom Plan:
-Nächster Schritt:
+Date:
+PoC stage:
+Result: passed | partially passed | blocked
+Test environment:
+Observations:
+Deviations:
+Next step:
 ```
-
-Größere Architekturänderungen werden zusätzlich in `DECISIONS.md` festgehalten.

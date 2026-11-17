@@ -1,170 +1,114 @@
-# Host Bridge
+# Host bridge
 
-Die Host Bridge beobachtet den lokalen OpenCode-Service, leitet daraus einen
-datenschutzarmen Gesamtstatus ab und überträgt ihn per USB-Serial oder
-Bluetooth LE an das Statuslicht.
+The host bridge observes the local OpenCode service, derives a privacy-minimized
+aggregate status, and sends it to the status light over USB serial or Bluetooth
+Low Energy.
 
-## Voraussetzungen
+## Requirements
 
-- Windows 10/11 oder macOS
-- Node.js 22 oder neuer
-- OpenCode V2 mit lokalem Background Service
-- Pro-Micro-nRF52840-Board mit der Firmware aus `../firmware/`
-- für den Bau des BLE-Helpers: Go 1.25 oder neuer
-- unter macOS zusätzlich Xcode Command Line Tools (`xcode-select --install`)
+- Windows 10/11 or macOS
+- Node.js 22 or newer
+- OpenCode V2 with a local background service
+- A Pro Micro nRF52840 board running the firmware from `../firmware/`
+- Go 1.25 or newer to build the BLE helper
+- Xcode Command Line Tools on macOS (`xcode-select --install`)
 
-## Installation
+## Install and run
 
 ```sh
 cd host
 npm install
-```
-
-## Ausführen
-
-Während der Entwicklung:
-
-```sh
+npm run build:bluetooth
 npm run dev
 ```
 
-Kompilierte Variante:
+For a compiled run:
 
 ```sh
 npm run build
 npm start
 ```
 
-Beenden mit `Ctrl+C`.
+Stop with `Ctrl+C`.
 
-Die Anwendung gibt JSON Lines aus, beispielsweise:
+## Privacy-preserving output
+
+The application writes JSON Lines such as:
 
 ```json
 {"timestamp":"2026-11-16T15:30:00.000Z","kind":"configuration","transportMode":"both","transports":["usb","bluetooth"]}
-{"timestamp":"2026-11-12T12:00:00.000Z","kind":"connected","overallStatus":"running","sessions":1}
 {"timestamp":"2026-11-12T12:00:03.000Z","kind":"event","event":"permission.asked","sessionId":"ses_...","sessionStatus":"asking","overallStatus":"asking"}
-{"timestamp":"2026-11-16T12:15:43.884Z","kind":"serial_connected","path":"COM6","firmware":"0.3.0","leds":1,"status":"running","role":"active"}
-{"timestamp":"2026-11-16T15:03:38.405Z","kind":"bluetooth_connected","path":"Bluetooth OCStatus (...)","firmware":"0.3.0","leds":1,"status":"running","role":"standby"}
+{"timestamp":"2026-11-16T12:15:43.884Z","kind":"serial_connected","path":"COM6","firmware":"0.6.5","leds":1,"status":"running","role":"active"}
 ```
 
-Es werden keine Prompts, Formularinhalte, Ressourcen oder Fehlermeldungen aus
-OpenCode-Events ausgegeben. Die Ausgabe enthält nur Zeit, Eventtyp, Session-ID
-und abgeleitete Zustände.
+Prompts, form contents, resources, file contents, provider contents, and
+OpenCode error text are not included. Output is limited to time, event type,
+session ID, transport metadata, and derived state. The example port above is
+illustrative; no port name is hard-coded.
 
-## Konfiguration
+## Configuration
 
-Die Dauer des Zustands `FINISHED` beträgt standardmäßig fünf Sekunden und ist
-fest auf maximal fünf Sekunden begrenzt. Für einen kürzeren Test kann sie über
-eine Umgebungsvariable geändert werden:
+Environment variables:
+
+| Variable | Default | Meaning |
+|---|---:|---|
+| `OPENCODE_STATUS_TRANSPORT` | `both` | `both`, `usb`, or `bluetooth` |
+| `OPENCODE_STATUS_BRIGHTNESS` | `128` | Logical brightness from 0 to 255 |
+| `OPENCODE_STATUS_FINISHED_HOLD_MS` | `5000` | Hold time, capped at five seconds |
+| `OPENCODE_STATUS_POLL_INTERVAL_MS` | `5000` | OpenCode snapshot reconciliation interval |
+
+POSIX shell example:
 
 ```sh
-OPENCODE_STATUS_FINISHED_HOLD_MS=2000 npm run dev
+OPENCODE_STATUS_TRANSPORT=usb OPENCODE_STATUS_BRIGHTNESS=96 npm run dev
 ```
 
-Unter PowerShell bleibt alternativ die Windows-Syntax möglich:
+PowerShell example:
 
 ```powershell
-$env:OPENCODE_STATUS_FINISHED_HOLD_MS = "2000"
+$env:OPENCODE_STATUS_TRANSPORT = "usb"
+$env:OPENCODE_STATUS_BRIGHTNESS = "96"
 npm run dev
 ```
 
-Zusätzlich gleicht die Anwendung den Zustand standardmäßig alle fünf Sekunden
-mit der OpenCode-API ab. Dadurch werden Änderungen erkannt, für die kein
-Live-Event gesendet wurde. Das Intervall lässt sich für Tests anpassen:
+`npm run dev:bluetooth` is a shortcut for Bluetooth-only mode.
 
-```sh
-OPENCODE_STATUS_POLL_INTERVAL_MS=2000 npm run dev
-```
+## Transport behavior
 
-Bei einer erkannten Abweichung entstehen synthetische Events:
+### USB
 
-- `host.session.inactive`: Eine zuvor bekannte Session ist nicht mehr aktiv.
-- `host.session.reconciled`: Eine aktive Session oder ihre offenen Anfragen
-  wurden über den Snapshot neu erkannt.
-
-Unveränderte Poll-Ergebnisse erzeugen weder Events noch Logausgaben. Eine
-Session in `FINISHED` bleibt zunächst für ihre konfigurierte Haltezeit sichtbar
-und wechselt danach zu `IDLE`. Bekannte Idle-Sessions bleiben erhalten, auch
-wenn sie nicht mehr im aktiven Snapshot auftauchen.
-
-Die LED-Helligkeit liegt standardmäßig bei 128 von 255:
-
-```sh
-OPENCODE_STATUS_BRIGHTNESS=96 npm run dev
-```
-
-Standardmäßig hält die Bridge USB und Bluetooth gleichzeitig verbunden. USB ist
-der bevorzugte aktive Transport; Bluetooth bleibt als überwachtes Backup im
-Standby. Voraussetzung ist, dass der BLE-Helper nach Quelländerungen einmal
-gebaut wurde:
-
-```sh
-npm run build:bluetooth
-npm run dev
-```
-
-Zur Laufzeit benötigt der bereits gebaute Helper kein Go. Für Diagnose und
-isolierte Tests kann ein einzelner Transport gewählt werden:
-
-```sh
-OPENCODE_STATUS_TRANSPORT=usb npm run dev
-OPENCODE_STATUS_TRANSPORT=bluetooth npm run dev
-```
-
-Erlaubt sind `both` (USB-Primary mit BLE-Backup, Standard), `usb` und
-`bluetooth`. `npm run dev:bluetooth` ist eine Kurzform für den
-Bluetooth-only-Modus.
-
-## USB-Geräteerkennung
-
-Die Bridge listet verfügbare Ports auf, öffnet aber nicht wahllos alle Geräte.
-Für den aktuellen PoC werden nur Ports mit der bestätigten Anwendungskennung
-VID/PID `239A:0029` betrachtet. Der UF2-Bootloader `239A:00B3` und fremde
-Bluetooth-COM-Ports werden nicht geöffnet.
-
-Jeder Kandidat muss anschließend auf `HELLO 1` mit einer gültigen
-`DEVICE OPENCODE_STATUS`-Antwort reagieren. Erst danach sendet die Bridge:
+The bridge lists ports but does not open them indiscriminately. It currently
+considers only the validated application VID/PID `239A:0029`; the UF2 bootloader
+`239A:00B3` and unrelated Bluetooth COM ports are ignored. Every candidate must
+respond correctly to `HELLO 1` before receiving:
 
 ```text
 RESET_STATE
 BRIGHTNESS <0-255>
-SET 0 <vollständiger Gesamtstatus>
+SET 0 <complete aggregate state>
 SYNC_COMPLETE
 ```
 
-Der Serialport-Pfad (zum Beispiel `COM6` oder `/dev/cu.usbmodem...`) wird nie
-fest codiert. Alle fünf Sekunden prüft
-`PING`/`PONG` die Verbindung. Nach einem Fehler oder Abziehen schließt die
-Bridge die Verbindung, sucht erneut und überträgt nach dem Reconnect immer den
-vollständigen aktuellen Hoststatus.
+The port name is discovered dynamically. `PING`/`PONG` checks the connection
+every five seconds. Reconnect always performs a new full synchronization.
 
-## Bluetooth-Geräteerkennung
+### Bluetooth LE
 
-Der kleine Go-Helper unter `ble-helper/` verwendet unter Windows WinRT und unter
-macOS CoreBluetooth. Ein Austausch des Bluetooth-Treibers und eine manuelle
-Kopplung sind nicht erforderlich. Der Helper muss auf dem jeweiligen
-Betriebssystem lokal gebaut werden; ein Cross-Build von Windows nach macOS wird
-von der CoreBluetooth-Bibliothek nicht unterstützt.
+The helper in `ble-helper/` uses WinRT on Windows and CoreBluetooth on macOS. It
+must be built on the target operating system. No Bluetooth driver replacement or
+manual pairing is required for the current PoC. macOS may request Bluetooth
+permission for the terminal or development environment.
 
-Beim ersten BLE-Start fragt macOS gegebenenfalls nach Bluetooth-Zugriff für das
-Terminal oder die verwendete Entwicklungsumgebung. Dieser Zugriff muss unter
-**Systemeinstellungen → Datenschutz & Sicherheit → Bluetooth** erlaubt sein.
+Discovery filters by `OCStatus` and the project-specific 128-bit GATT service.
+The address is discovered dynamically and is never configuration. The same
+`HELLO 1` handshake, full sync, keepalive, timeout, and reconnect rules apply.
 
-Die Suche filtert zuerst auf den Namen `OCStatus` und den projektspezifischen
-128-Bit-GATT-Dienst. Die BLE-Adresse wird nur protokolliert und nicht fest
-konfiguriert. Nach dem Verbinden muss das Board zusätzlich den gleichen
-`HELLO 1`-Handshake wie über USB bestehen. Danach gelten Vollsynchronisation,
-`PING`/`PONG`, Timeout und Reconnect für beide Transportwege gleich.
+In the default `both` mode, USB is active and BLE is standby. BLE stays verified
+with keepalives but receives no status commands while USB is available. USB
+disconnect activates BLE and triggers full sync; USB reconnect synchronizes and
+takes priority again.
 
-USB und Bluetooth führen Suche, Handshake, Verbindungsüberwachung und Reconnect
-unabhängig aus. Solange USB verfügbar ist, erhält nur USB die Statusbefehle;
-Bluetooth prüft seine Standby-Verbindung mit `PING`/`PONG`. Bei einem USB-
-Disconnect wird das bereits verbundene BLE-Backup sofort aktiv und führt vor
-dem ersten Statusupdate eine vollständige Synchronisation aus. Nach einem
-erfolgreichen USB-Reconnect synchronisiert USB den aktuellen Zustand und BLE
-kehrt in den Standby zurück.
-
-## Qualitätsprüfungen
+## Quality checks
 
 ```sh
 npm test
@@ -172,67 +116,45 @@ npm run check
 npm run build
 ```
 
-Die Tests benötigen weder OpenCode noch USB-Hardware. Der echte OpenCode-Adapter
-wird im manuellen PoC zusätzlich gegen den lokalen Service geprüft.
+The automated host tests require neither OpenCode nor hardware.
 
-## Aufbau
+## Layout
 
 ```text
-src/core/                 Reines Zustandsmodell, ohne SDK- oder I/O-Abhängigkeit
-src/ports/                Schnittstellen für Eingabe und Ausgabe
-src/application/          Reconnect- und Ablaufsteuerung
-src/adapters/opencode/    OpenCode SDK, Snapshot und Event-Normalisierung
-src/adapters/console/     Datenschutzarme JSON-Ausgabe
-src/adapters/serial/      Plattformübergreifender Serialport und Zeilenprotokoll
-src/adapters/bluetooth/   Start und Überwachung des nativen BLE-Helpers
-ble-helper/               Go-GATT-Client über WinRT bzw. CoreBluetooth
-test/                     Unit- und Anwendungstests mit Fakes
+src/core/                 Pure state model
+src/ports/                Input and output interfaces
+src/application/          Reconnect, synchronization, and orchestration
+src/adapters/opencode/    SDK, snapshots, and event normalization
+src/adapters/console/     Privacy-minimized JSON output
+src/adapters/serial/      Cross-platform serial transport
+src/adapters/bluetooth/   Native BLE helper lifecycle
+ble-helper/               Go GATT client using WinRT/CoreBluetooth
+test/                     Unit and application tests with fakes
 ```
 
-Der Serial-Adapter ist als zusätzliche Ausgabe ergänzt, ohne den OpenCode-
-Adapter oder die Zustandsmaschine mit Hardwaredetails zu koppeln.
+## Manual smoke tests
 
-## Manueller USB-Test
+### USB
 
-1. Board anschließen und sicherstellen, dass die Firmware nicht im
-   `NICENANO`-Bootloader wartet.
-2. Für einen isolierten Test `OPENCODE_STATUS_TRANSPORT=usb` setzen und
-   `npm run dev` starten.
-3. Auf `serial_connected` mit Firmwareversion und synchronisiertem Status achten.
-4. Eine OpenCode-Aufgabe starten und die rote LED beobachten.
-5. Board abziehen und erneut anschließen; die Bridge muss ohne feste
-   COM-Port-Nummer wieder verbinden und den aktuellen Zustand wiederherstellen.
+1. Connect the flashed board and ensure it is not waiting in the UF2 bootloader.
+2. Set transport to `usb` and run `npm run dev`.
+3. Wait for `serial_connected` and a synchronized status.
+4. Start an OpenCode task and observe the RGB LED.
+5. Unplug and reconnect the board; it must recover without a configured port.
 
-## Manueller Bluetooth-Test
+### Bluetooth
 
-1. Firmware 0.3.3 oder neuer starten; USB darf dabei nur als Stromversorgung
-   dienen.
-2. Im Hostordner `npm run dev:bluetooth` starten.
-3. Auf `bluetooth_connected` mit der erwarteten Firmwareversion achten. Es darf
-   in diesem Lauf kein `serial_connected` erscheinen.
-4. Eine OpenCode-Aufgabe und eine Rückfrage starten; `RUNNING`, `ASKING` und
-   `FINISHED` an der roten LED prüfen.
-5. Für einen vollständig kabellosen Test das Board nur dann von USB trennen,
-   wenn ein geeigneter, korrekt gepolter 3,7-V-Einzellenakku angeschlossen ist.
+1. Start current firmware; USB may be used only for power.
+2. Run `npm run dev:bluetooth`.
+3. Wait for `bluetooth_connected`; no `serial_connected` should appear.
+4. Exercise `RUNNING`, `ASKING`, and `FINISHED`.
+5. Disconnect USB only when a suitable, correctly polarized 3.7 V single-cell
+   battery is connected.
 
-## Manueller Failover-Test
+### Failover
 
-1. Keine Transportvariable setzen und `npm run dev` starten.
-2. `serial_connected` mit Rolle `active` und `bluetooth_connected` mit Rolle
-   `standby` abwarten.
-3. USB unterbrechen, während das Board weiterhin mit Strom versorgt wird.
-4. `bluetooth_role_changed` mit Rolle `active` abwarten und Statusänderungen
-   testen.
-5. USB wiederherstellen: USB muss wieder `active`, Bluetooth wieder `standby`
-   werden.
-
-## Manueller PoC 1
-
-1. `npm run dev` starten.
-2. In OpenCode eine normale Aufgabe starten und abschließen.
-3. Eine Frage bzw. ein Formular und eine Berechtigungsanfrage beobachten.
-4. Eine Ausführung unterbrechen und, wenn kontrolliert möglich, einen Fehler
-   auslösen.
-5. Zwei Sessions parallel ausführen.
-6. OpenCode-Service oder Host Bridge neu verbinden und den Start-Snapshot prüfen.
-7. Ergebnisse in `../docs/PROGRESS.md` dokumentieren.
+1. Run `npm run dev` without setting a transport variable.
+2. Wait for USB role `active` and Bluetooth role `standby`.
+3. Interrupt USB while keeping the board powered.
+4. Confirm Bluetooth changes to `active` and status updates continue.
+5. Restore USB and confirm roles return to USB active/Bluetooth standby.

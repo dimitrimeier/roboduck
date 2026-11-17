@@ -1,26 +1,45 @@
-# Dependencies and build output
+# Dependencies, test results, and build output
 node_modules/
 dist/
 build/
 host/bin/
 .pio/
+coverage/
+*.lcov
 
 # Local configuration and secrets
 .env
 .env.*
 !.env.example
 config.local.*
+*.local.json
+*.local.yaml
+*.local.yml
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+credentials.*
+secrets.*
 
 # Logs and temporary files
 *.log
 *.tmp
+*.bak
 *.swp
+*.swo
+*.pid
+*.stackdump
 
 # Editors and operating systems
 .idea/
 .vscode/
+.vs/
 .DS_Store
 Thumbs.db
+Desktop.ini
 
 # Firmware artifacts
 *.bin

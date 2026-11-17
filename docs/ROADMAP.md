@@ -1,80 +1,68 @@
 # Roadmap
 
-## Phase 0 – Anforderungen und Hardware festlegen
+## Phase 0 — Requirements and hardware
 
-- [x] Mikrocontroller auswählen: nice!nano-kompatibler Pro Micro nRF52840.
-- [ ] LED-Typ und Anzahl festlegen.
-- [ ] Gesamtstatus oder eine LED pro Session für den MVP entscheiden.
-- [ ] Farb- und Animationsschema bestätigen.
-- [x] Beispielgerät unter Windows auslesen und VID/PID/Produktdaten notieren.
+- [x] Select a microcontroller: nice!nano-compatible Pro Micro nRF52840.
+- [ ] Finalize LED type and count.
+- [ ] Decide between aggregate status and one LED per session for the MVP.
+- [ ] Confirm the final color and animation scheme.
+- [x] Inspect a sample device and record its USB metadata.
 
-**Ergebnis:** Verbindliche MVP-Hardware und Anzeigeform.
+**Outcome:** agreed MVP hardware and display format.
 
-## Phase 0.5 – Proof of Concept
+## Phase 0.5 — Proof of concept
 
-- [ ] OpenCode-API und relevante Events ohne Hardware beobachten.
-- [ ] Zustandsableitung mit synthetischen bzw. aufgezeichneten Events testen.
-- [x] Serial-Protokoll zunächst mit einem simulierten Gerät testen.
-- [x] Mikrocontroller nur per USB und ohne gelötete externe LEDs testen.
-- [x] End-to-End-Durchstich mit eingebauter Board-LED durchführen.
-- [x] USB-Reconnect mit vollständiger Synchronisation testen.
-- [ ] Einen mindestens zweistündigen Lauf testen.
-- [ ] Go/No-Go-Entscheidung dokumentieren.
+- [ ] Complete observation of the OpenCode API and all relevant events.
+- [ ] Complete state derivation tests with edge cases and reordered events.
+- [x] Test the serial protocol with a simulated device.
+- [x] Test the microcontroller over USB without soldered external LEDs.
+- [x] Complete an end-to-end path with a physical LED.
+- [x] Test USB reconnect with full synchronization.
+- [ ] Complete a run of at least two hours.
+- [ ] Record the final go/no-go decision.
 
-Details und Abnahmekriterien stehen in [POC.md](POC.md).
+See [POC.md](POC.md) for details and acceptance criteria.
 
-**Ergebnis:** Die kritischen technischen Annahmen sind vor Aufbau der finalen
-Hardware praktisch bestätigt oder als Blocker dokumentiert.
+## Phase 1 — Device prototype
 
-## Phase 1 – Serial-Prototyp
+- [x] Create the firmware project.
+- [x] Implement the `HELLO`/`DEVICE` handshake.
+- [x] Implement reset, state, keepalive, and error responses.
+- [x] Implement LED states and animations.
+- [x] Create safe host-side device test tools.
+- [x] Test unplug and reconnect.
+- [ ] Test a changed COM port and a genuinely blocked port.
 
-- [x] Firmware-Grundprojekt anlegen.
-- [x] `HELLO`/`DEVICE`-Handshake implementieren.
-- [x] `RESET_STATE`, `SET`, `PING` und Fehlerantworten implementieren.
-- [x] LED-Zustände und einfache Animationen implementieren.
-- [x] Kleines Host-Testprogramm für Portsuche und Befehle erstellen.
-- [x] Abziehen und erneutes Anschließen testen.
-- [ ] Wechselnde COM-Port-Nummer testen.
+## Phase 2 — OpenCode integration
 
-**Ergebnis:** Der Host findet das Gerät automatisch und kann LEDs zuverlässig
-steuern.
+- [x] Structure the TypeScript host project.
+- [x] Discover and authenticate to the local OpenCode service.
+- [x] Load active sessions and subscribe to relevant events.
+- [x] Implement the session state machine.
+- [x] Fully resynchronize after reconnect.
+- [x] Connect derived states to USB and BLE transports.
 
-## Phase 2 – OpenCode anbinden
+## Phase 3 — Reliability
 
-- [x] TypeScript-Hostprojekt strukturieren.
-- [x] Lokalen OpenCode-Service ermitteln und authentifiziert verbinden.
-- [x] Aktive Sessions einlesen.
-- [x] Relevante Events abonnieren.
-- [x] Session-Zustandsmaschine implementieren.
-- [x] Vollständige Resynchronisation nach Reconnect implementieren.
-- [x] Zustände an den Serial-Prototyp koppeln.
+- [x] Implement OpenCode reconnect with backoff.
+- [x] Implement `PING`/`PONG` and transport timeouts.
+- [ ] Test blocked and unrelated ports in realistic conditions.
+- [ ] Test Windows lock, standby, and resume.
+- [ ] Test behavior across OpenCode and firmware updates.
+- [ ] Add bounded, structured, privacy-preserving logs.
+- [ ] Complete a multi-hour USB-primary/BLE-backup test.
 
-**Ergebnis:** Reale OpenCode-Aktivität steuert die Anzeige.
+## Phase 4 — Installation and daily use
 
-## Phase 3 – Robustheit
+- [ ] Define a validated configuration file.
+- [ ] Add optional startup integration.
+- [ ] Evaluate an optional tray icon.
+- [ ] Write build and installation instructions.
+- [ ] Document the enclosure and final wiring.
 
-- [x] Backoff und Reconnect für OpenCode implementieren.
-- [x] `PING`/`PONG` und Serial-Timeouts implementieren.
-- [ ] Blockierte und fremde Ports testen.
-- [ ] Standby/Aufwachen unter Windows testen.
-- [ ] Verhalten bei OpenCode- und Firmware-Updates testen.
-- [ ] Strukturierte, datenschutzfreundliche Logs ergänzen.
+## Later
 
-**Ergebnis:** Mehrstündiger Betrieb ohne manuelle Überwachung.
-
-## Phase 4 – Bedienung und Installation
-
-- [ ] Konfigurationsdatei definieren.
-- [ ] Windows-Autostart einrichten.
-- [ ] Optionales Tray-Symbol bewerten bzw. umsetzen.
-- [ ] Build- und Installationsanleitung schreiben.
-- [ ] Gehäuse und finale Verkabelung dokumentieren.
-
-**Ergebnis:** Alltagstaugliche Installation.
-
-## Später
-
-- [ ] Mehrere Sessions auf mehreren LEDs darstellen.
-- [ ] Subagenten separat darstellen.
-- [x] Bluetooth LE als alternative Verbindung zu USB bewerten und prototypisch testen.
-- [ ] OLED, Taster oder weitere Ausgabegeräte prüfen.
+- [ ] Display multiple sessions separately.
+- [ ] Display subagents separately.
+- [x] Prototype Bluetooth LE as an alternative transport.
+- [ ] Evaluate an OLED, buttons, or additional output devices.

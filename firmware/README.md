@@ -1,105 +1,84 @@
 # Firmware
 
-Firmware 0.6.5 unterstützt auf dem nice!nano-v2-kompatiblen
-Pro-Micro-nRF52840-Board gleichzeitig USB-CDC und Bluetooth LE. Beide
-Transportwege verwenden dasselbe Statusprotokoll. Die über `P0.15`
-programmierbare interne rote Board-LED ist deaktiviert. Die Firmware steuert das
-erste externe Common-Cathode-RGB-Auge über drei Hardware-PWM-Kanäle. Ein zweites Auge wird
-weiterhin logisch gespiegelt, ist aber noch nicht elektrisch angeschlossen.
+Firmware 0.6.5 supports USB CDC and Bluetooth LE concurrently on the tested
+nice!nano-v2-compatible Pro Micro nRF52840 board. Both transports use the same
+status protocol. The programmable internal red LED at `P0.15` is disabled. The
+first external common-cathode RGB eye is driven by three hardware PWM channels;
+a planned second eye is mirrored logically but not yet connected.
 
-## Hardware
+## Tested hardware
 
-- Board-ID des geprüften Boards: `nRF52840-nicenano`
-- UF2-Bootloader: 0.6.0
-- rote Benutzer-LED: `P0.15`, aktiv High
-- USB-Bootloader: VID `239A`, PID `00B3`
-- USB-Anwendungsfirmware: VID `239A`, PID `0029`
+- Board ID: `nRF52840-nicenano`
+- UF2 bootloader: 0.6.0
+- Red user LED: `P0.15`, active high, disabled by this firmware
+- USB bootloader VID/PID: `239A:00B3`
+- USB application VID/PID: `239A:0029`
+- Toolchain used for physical validation: Go 1.27.3, TinyGo 0.44.0,
+  `tinygo.org/x/bluetooth` 0.17.0
 
-Build, UF2-Flash sowie USB- und BLE-Protokolltests wurden am 16. November 2026
-mit Go 1.27.3, TinyGo 0.44.0 und `tinygo.org/x/bluetooth` 0.17.0 erfolgreich auf
-dem realen Board ausgeführt.
+On the tested clone, the blue LED belongs to the charging circuit and cannot be
+controlled as a normal GPIO status LED. Its blinking is unrelated to Bluetooth.
 
-Beim geprüften Clone ist die rote LED die programmierbare Benutzer-LED. Die
-blaue LED blinkt unabhängig von der Firmware und gehört zur Ladeschaltung; sie
-ist nicht als normale GPIO-Status-LED steuerbar. Diese Farbzuordnung ist
-gegenüber einem originalen nice!nano vertauscht. Das blaue Blinken ohne Akku
-wird nicht von Bluetooth verursacht.
+## Display states
 
-## Statusanzeige auf dem externen RGB-Auge
-
-| Zustand | Muster |
+| State | Pattern |
 |---|---|
-| `OFF` | aus |
-| `IDLE` | kurz grün mit 20 %, danach kurz grün mit voller global begrenzter Helligkeit, dann 3 s Pause |
-| `FINISHED` | grün pulsierend |
-| `RUNNING` | warmes Pink → Violett → Türkisgrün als weicher Verlauf bei 15 % relativer Helligkeit |
-| `ASKING` | erst gelber, dann grüner Blitz; bisheriges Timing bleibt erhalten |
-| `ERROR` | schnell rot blinkend |
+| `OFF` | Off |
+| `IDLE` | Short green at 20%, short green at full globally limited brightness, then 3 s off |
+| `FINISHED` | Green pulse |
+| `RUNNING` | Warm pink → violet → turquoise-green fade at 15% relative brightness |
+| `ASKING` | Yellow flash followed by green flash |
+| `ERROR` | Fast red blink |
 
-Die interne rote Board-LED bleibt in allen Phasen aus.
+The internal red board LED remains off in every phase.
 
-## Simulierter Start- und Verbindungsablauf
+## Startup and connection sequence
 
-Firmware 0.6.5 rendert nicht blockierend folgenden Ablauf für beide Augen
-identisch:
+The renderer is non-blocking:
 
-1. Rot geht innerhalb von 1,1 Sekunden weich in Gelb und anschließend innerhalb
-   weiterer 1,1 Sekunden weich in Grün über. Es gibt keine dunklen
-   Zwischenpausen.
-2. Nach Grün bleibt die Anzeige 500 ms aus.
-3. Der beim Start über `VDDH/5` gemessene Versorgungswert wird 1,5 Sekunden
-   dauerhaft in seiner Akkufarbe angezeigt:
-   - Rot unter 3,60 V
-   - Gelb von 3,60 V bis unter 3,90 V
-   - Grün ab 3,90 V
-   - Gelb als „unbekannt“, wenn über 4,40 V eine USB-Versorgung erkannt wird
-4. Danach bleibt die Anzeige eine Sekunde aus.
-5. Blau pulsiert, bis ein gültiger `HELLO 1`-Handshake über USB oder BLE
-   empfangen wurde.
-6. Drei kurze blaue Blinker bestätigen die Verbindung.
-7. Danach gelten die oben beschriebenen RGB-Statusmuster.
+1. Red fades to yellow in 1.1 seconds, then yellow to green in 1.1 seconds.
+2. The display remains off for 500 ms.
+3. Startup supply is shown for 1.5 seconds: red below 3.60 V, yellow below
+   3.90 V, green from 3.90 V, or yellow “unknown” when USB supply above 4.40 V
+   is detected.
+4. The display remains off for one second.
+5. Blue pulses until a valid `HELLO 1` arrives over USB or BLE.
+6. Three short blue flashes confirm connection.
+7. The normal status pattern begins.
 
-Bei 15 Sekunden ohne Hostaktivität wird kein alter Status weiter angezeigt;
-die Firmware kehrt stattdessen zum blauen Verbindungspulsieren zurück. Ein
-bereits während der Startsequenz erkannter Host wird nach der Akkuanzeige direkt
-mit den drei kurzen Blinkern bestätigt.
+After 15 seconds without host activity, stale status is discarded and the blue
+connection pulse returns. Battery thresholds are preliminary coarse levels, not
+precise state-of-charge measurement. While USB is connected, this board cannot
+simultaneously measure actual battery voltage through `VDDH/5`.
 
-Die Akkustufen sind eine vorläufige lineare Drittelung von 3,30 bis 4,20 V und
-keine präzise Kapazitätsmessung. Bei USB kann dieser Board-Clone über `VDDH/5`
-nicht gleichzeitig die echte Akkuspannung bestimmen.
+## Build and flash with TinyGo
 
-## Build mit TinyGo
+Requirements: Go 1.25 or newer and TinyGo 0.44 or newer.
 
-Voraussetzungen:
-
-- Go 1.25 oder neuer
-- TinyGo 0.44 oder neuer
-
-Aus `firmware/` bauen:
+From `firmware/`:
 
 ```powershell
 tinygo build -target=nicenano -o build/opencode-status-light.uf2 .
 ```
 
-Zum Flashen `RST` zweimal kurz mit `GND` verbinden. Sobald Windows das Laufwerk
-`NICENANO` anzeigt, die UF2-Datei darauf kopieren:
+To enter the UF2 bootloader, briefly connect `RST` to `GND` twice. Verify the
+mounted drive before copying; the drive letter below is only an example:
 
 ```powershell
 Copy-Item ./build/opencode-status-light.uf2 D:/
 ```
 
-Der Laufwerksbuchstabe ist nur ein Beispiel und muss vorher geprüft werden.
-Alternativ kann TinyGo das erkannte UF2-Laufwerk selbst verwenden:
+Alternatively, let TinyGo locate the UF2 drive:
 
 ```powershell
 tinygo flash -target=nicenano .
 ```
 
-Der vorhandene UF2-Bootloader wird dabei nicht überschrieben.
+The existing UF2 bootloader is not overwritten.
 
-## Protokoll
+## Protocol
 
-Die Firmware implementiert Version 1 des zeilenbasierten Protokolls:
+Firmware implements version 1 of the line-oriented protocol:
 
 ```text
 HELLO 1
@@ -114,166 +93,105 @@ DISPLAY
 DISPLAY_DEMO
 ```
 
-Der Handshake antwortet beispielsweise mit:
+Example handshake response:
 
 ```text
 DEVICE OPENCODE_STATUS protocol=1 firmware=0.6.5 leds=1
 ```
 
-Die maximale Befehlslänge beträgt 95 Byte ohne Zeilenende. Unbekannte oder
-ungültige Befehle werden mit `ERROR <code>` abgelehnt.
+Commands are limited to 95 bytes excluding the line ending. Unknown or invalid
+commands return `ERROR <code>`.
 
-`BATTERY` liest den für nice!nano vorgesehenen Akku-ADC `P0.04` (`AIN2`) und
-liefert beispielsweise:
+### Supply diagnostics
+
+`BATTERY` reads the divider expected on `P0.04`/`AIN2` on an original
+nice!nano:
 
 ```text
 BATTERY raw=8672 adc_mv=397 source_mv=556
 ```
 
-`source_mv` verwendet den Spannungsteiler des originalen nice!nano mit dem
-Faktor 7/5. Bei kompatiblen Clones muss dieser Wert mit einem angeschlossenen
-Akku und einem Multimeter kalibriert werden. Ohne Akku ist der Messwert durch
-die Ladeschaltung bzw. einen offenen Messeingang beeinflusst und stellt weder
-die USB-Spannung noch einen Akkustand dar. Die USB-5-V-Schiene wird nicht direkt
-an den ADC gelegt.
+On the tested clone, `source_mv` remains around 0.51–0.59 V even on battery and
+must not be interpreted as battery voltage. It may also float without a battery.
 
-Beim konkret geprüften Clone blieb `source_mv` auch im reinen Akkubetrieb nur
-bei ungefähr 0,51–0,59 V. Das Board läuft dabei nachweislich über BLE weiter,
-der Akku ist also aktiv. Dieser Clone führt die Akkuspannung folglich nicht wie
-ein originales nice!nano über den erwarteten Teiler an `P0.04`; der ausgegebene
-Wert darf auf dieser Hardware nicht als Akkuspannung interpretiert werden.
-
-`SUPPLY` liest stattdessen den internen nRF52840-Kanal `VDDH/5`, für den keine
-GPIO-Verbindung erforderlich ist:
+`SUPPLY` instead reads the internal nRF52840 `VDDH/5` channel:
 
 ```text
 SUPPLY raw=18752 adc_mv=859 supply_mv=4230
 ```
 
-Dieser Kanal lieferte auf dem realen Clone bei USB-Versorgung etwa 4,91 V und
-unmittelbar danach im reinen Akkubetrieb stabil 4,295 V. Damit eignet er sich
-grundsätzlich zur Akkuspannungsschätzung ohne zusätzliche Verdrahtung. Vor der
-Umrechnung in Prozent wurde der Wert gegen eine Multimetermessung von 4,230 V
-kalibriert. Firmware 0.3.3 korrigiert die zuvor gemeldeten 4,295 V deshalb mit
-dem Faktor `4230/4295` beziehungsweise ungefähr 0,98487. Der Faktor gilt für das
-konkret geprüfte Board; nRF52840-ADC und interne Referenz können zwischen
-Exemplaren abweichen.
+The tested board reported approximately 4.91 V on USB and 4.295 V on battery
+before calibration. Firmware applies the board-specific factor `4230/4295`,
+measured against a 4.230 V multimeter reference. This factor may differ between
+boards and should not be treated as universal calibration.
 
-Nach dem Flashen von Firmware 0.3.3 ergaben drei BLE-Abfragen im reinen
-Akkubetrieb 4,220 V, 4,230 V und 4,230 V. Die Kalibrierung stimmt damit bis auf
-10 mV mit der gleichzeitig verwendeten Multimeterreferenz von 4,230 V überein.
+### Display diagnostics
 
-`DISPLAY` macht die RGB-Simulation abfragbar, ohne ungefragte Diagnosezeilen in
-den USB-/BLE-Anforderungsablauf einzustreuen. Beispiel:
+`DISPLAY` reports the current logical phase and RGB color without unsolicited
+protocol output:
 
 ```text
 DISPLAY phase=CONNECTING battery=HIGH supply_mv=4230 rgb=0,0,147
 ```
 
-Die Werte beschreiben die aktuell simulierte Farbe vor Anwendung der globalen
-Helligkeit. Beide zukünftigen Augen verwenden vorerst denselben Wert.
-
-`DISPLAY_DEMO` startet den vollständigen Diagnoseablauf erneut. Im Demomodus
-bleibt die blaue Verbindungssuche unabhängig von der bereits für die Diagnose
-benötigten Verbindung drei Sekunden sichtbar. Danach folgen die drei kurzen
-Verbindungsblinker und der Wechsel zum Status. Der Befehl blockiert weder den
-Parser noch USB oder BLE.
-
-Nach einem erfolgreichen Host-Befehl erwartet die Firmware spätestens nach 15
-Sekunden weitere Aktivität. Bleiben Statusbefehle und `PING` aus, wechselt die
-Anzeige selbstständig zum blauen Verbindungspulsieren. Dadurch bleibt nach
-einem Host-Absturz kein veralteter Agentenstatus dauerhaft sichtbar. Der frühere
-Rückfall auf `OFF` wurde am realen Board bestätigt; die neue RGB-Suchanzeige ist
-bis zur externen Verdrahtung nur per `DISPLAY` und Board-LED simulierbar.
+`DISPLAY_DEMO` restarts the diagnostic sequence and keeps connection search
+visible for three seconds before confirmation flashes. It does not block USB,
+BLE, or the parser.
 
 ## Bluetooth LE
 
-Die Firmware wirbt ohne vorherige Windows-Kopplung als `OCStatus`. Zur
-technischen Vorfilterung wird ausschließlich der projektspezifische GATT-Dienst
-verwendet:
+Firmware advertises as `OCStatus` without requiring pairing in the current PoC:
 
 ```text
 Service: 78B13697-8A60-4161-A989-69661675E94A
-RX:      5657F6C0-13B2-4535-8F85-14CACF398B5F  (Host → Board)
-TX:      E41A114E-C190-4278-AA26-72C8563ADF58  (Board → Host)
+RX:      5657F6C0-13B2-4535-8F85-14CACF398B5F  (host → board)
+TX:      E41A114E-C190-4278-AA26-72C8563ADF58  (board → host)
 ```
 
-Erst nach dem zusätzlichen `HELLO 1`-Handshake sendet die Host Bridge
-Statusbefehle. Lange Antworten werden in BLE-Pakete aufgeteilt; Empfang,
-Parsing und Versand sind über feste Ringpuffer vom SoftDevice-Callback
-entkoppelt.
+The host filters by service and name and must still complete `HELLO 1` before
+sending status commands. Ring buffers keep GATT callbacks separate from parsing
+and transmission. BLE is currently unpaired and unencrypted; the handshake is
+device identification, not cryptographic authentication. Only abstract status
+values are transmitted.
 
-Die Verbindung ist im aktuellen PoC nicht gekoppelt oder verschlüsselt. Der
-Handshake identifiziert das Protokoll, ist aber keine kryptografische
-Authentifizierung. Über BLE werden weiterhin nur abstrahierte LED-Zustände und
-keine OpenCode-Inhalte übertragen.
+## Safe Windows hardware tests
 
-## Test unter Windows
-
-Nach dem Flashen in PowerShell aus dem Repository-Stamm ausführen:
+From the repository root after flashing:
 
 ```powershell
 ./firmware/tools/Test-StatusLight.ps1
 ```
 
-Vor dem Verdrahten lässt sich der simulierte RGB-Ablauf als zeitgestempeltes
-Protokoll ansehen. Dazu die Host Bridge beenden, damit sie den COM-Port nicht
-belegt, und aus dem Repository-Stamm ausführen:
+To inspect the startup phases as timestamped protocol output, stop the host
+bridge first and run:
 
 ```powershell
 ./firmware/tools/Watch-DisplayPhases.ps1
 ```
 
-Das Skript filtert ebenfalls zuerst über die bestätigte USB-Kennung, führt den
-Handshake aus, startet `DISPLAY_DEMO` und fragt anschließend nur `DISPLAY` ab.
-Es sendet keine Befehle an ungeprüfte Serialgeräte und enthält keine fest
-codierte COM-Port-Nummer.
+Both scripts pre-filter by the validated USB application identifier and require
+the handshake before issuing commands. They contain no fixed COM port. Visual
+appearance must still be confirmed by a person.
 
-Das Skript verwendet keine fest codierte COM-Port-Nummer. Es filtert zuerst
-nach der USB-Kennung der nice!nano-Anwendungsfirmware, bestätigt das Gerät per
-`HELLO`-Handshake, prüft gültige sowie ungültige Befehle und durchläuft erst
-danach alle LED-Muster. Ob die Muster richtig aussehen, muss visuell bestätigt
-werden; das kann der serielle Protokolltest nicht erkennen.
+## RGB wiring
 
-## Spätere externe RGB-Augen
+Two four-pin common-cathode RGB LEDs are planned. Six separate PWM channels and
+six separate resistors are required to allow later independent control. The
+cathodes connect to ground. Final resistors and source drivers must be selected
+after measuring forward voltage. The intended final point is 10 mA per channel;
+the nRF52840 GPIOs should provide PWM control signals rather than directly
+supply that current.
 
-Vorgesehen sind zwei 4-Pin-RGB-LEDs mit gemeinsamer Kathode. Damit beide Augen
-später unabhängig steuerbar bleiben, werden sechs getrennte PWM-Ausgänge
-eingeplant: Rot, Grün und Blau pro Auge. Vorerst erhalten alle drei Kanäle
-beider Augen jeweils identische Softwarewerte.
+Current first-eye prototype:
 
-Jeder der sechs Farbkanäle benötigt einen eigenen Vorwiderstand; auch identisch
-angesteuerte Kanäle dürfen keinen gemeinsamen Widerstand verwenden. Die beiden
-gemeinsamen Kathoden kommen an Masse. Konkrete GPIO-Pins, Widerstände und eine
-eventuell nötige Treiberstufe werden erst nach Vorliegen von Durchlassspannung
-je Farbe festgelegt. Als vorläufiger Auslegungspunkt gelten 10 mA je Farbkanal
-bei 100 % PWM, also maximal 60 mA für alle sechs gleichzeitig eingeschalteten
-Kanäle. Die GPIO-Logik arbeitet mit 3,3 V;
-ein Kanal mit bis zu 4 V Durchlassspannung kann daran nicht zuverlässig
-leuchten. Direktansteuerung ist nur bei einem für das nRF52840 sicheren kleinen
-Kanal- und Gesamtstrom zulässig. Für 10 mA werden geeignete Source-Treiber
-eingeplant; die GPIOs liefern nur die PWM-Steuersignale.
-
-### Aktueller Anschluss des ersten Auges
-
-Firmware 0.5.0 verwendet folgende bestätigte `nicenano`-Pins:
-
-| Kanal | Board-Pin | nRF52840 | Anschluss |
+| Channel | Board pin | nRF52840 | Connection |
 |---|---|---|---|
-| Rot | `D104` / `104` | `P1.04` | GPIO → Widerstand → rote Anode |
-| Grün | `D106` / `106` | `P1.06` | GPIO → Widerstand → grüne Anode |
-| Blau | `D011` / `011` | `P0.11` | GPIO → Widerstand → blaue Anode |
-| gemeinsam | `GND` | Masse | gemeinsame Kathode |
+| Red | `D104` / `104` | `P1.04` | GPIO → resistor → red anode |
+| Green | `D106` / `106` | `P1.06` | GPIO → resistor → green anode |
+| Blue | `D011` / `011` | `P0.11` | GPIO → resistor → blue anode |
+| Common | `GND` | Ground | Common cathode |
 
-Die externe LED verwendet drei Kanäle von `PWM0` mit 2 ms Periode. Die interne
-rote Board-LED wird nicht an PWM angebunden und bleibt als GPIO ausgeschaltet.
-Die drei RGB-Kanäle sind nicht invertiert: 0 ist aus. Seit Firmware 0.6.2 ist
-die physische Ausgabe global auf etwa 65 % begrenzt. `BRIGHTNESS 255` erreicht
-daher höchstens 166 von 255 Ausgangsstufen; kleinere Helligkeiten werden
-proportional skaliert.
-Diese Grenze gilt auch für Start-, Akku-, Verbindungs- und Statusanzeige. Die
-Vorwiderstände bleiben die maßgebliche Strombegrenzung.
-
-Dieser erste Aufbau ist ein direkter Funktionstest ohne Source-Treiber und darf
-nicht als 10-mA-Endschaltung verstanden werden. Mit den vorbereiteten
-Widerständen wird bewusst unterhalb dieses späteren Auslegungspunkts getestet.
+The three channels use `PWM0` with a 2 ms period and are not inverted. Firmware
+globally limits physical output to 166/255 (about 65%); resistors remain the
+actual current limit. This direct prototype intentionally operates below the
+planned 10 mA and is not the final electrical design.

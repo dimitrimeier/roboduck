@@ -1,89 +1,75 @@
 # Features
 
-## MVP – Muss-Funktionen
+## MVP requirements
 
-### OpenCode-Zustände erfassen
+### Observe OpenCode state
 
-- Aktive Sessions beim Start einlesen.
-- Live-Events des lokalen OpenCode-Services abonnieren.
-- Mindestens folgende Anzeigezustände ableiten:
-  - `RUNNING`
-  - `ASKING`
-  - `FINISHED`
-  - `ERROR`
-  - `IDLE`
-  - `OFF` (keine relevante Session)
-- Berechtigungsanfragen und Formulare als `ASKING` behandeln.
-- Nach Verbindungsabbrüchen erneut verbinden und vollständig synchronisieren.
+- Load active sessions at startup.
+- Subscribe to live events from the local OpenCode service.
+- Derive `RUNNING`, `ASKING`, `FINISHED`, `ERROR`, `IDLE`, and `OFF`.
+- Treat permission requests and forms as `ASKING`.
+- Reconnect and fully synchronize after a connection loss.
 
-### USB-Gerät automatisch erkennen
+### Discover the USB device safely
 
-- Verfügbare Serialports unter Windows regelmäßig prüfen.
-- Kandidaten nach USB-Metadaten wie VID, PID, Produktname und Seriennummer
-  vorfiltern.
-- Gerät erst nach erfolgreichem Protokoll-Handshake akzeptieren.
-- Geänderte COM-Port-Nummern tolerieren.
-- Abziehen und erneutes Anschließen ohne Neustart der Host-Anwendung behandeln.
-- Blockierte oder fremde Ports sicher überspringen.
+- Periodically enumerate available serial ports.
+- Pre-filter candidates by USB metadata such as VID, PID, product name, and
+  serial number.
+- Accept a device only after a successful protocol handshake.
+- Tolerate changing COM port names and reconnect without restarting the host.
+- Safely skip blocked and unrelated ports.
 
-### Synchronisation
+### Synchronize state
 
-- Nach dem Verbinden `RESET_STATE` senden.
-- Danach immer einen vollständigen Zustand übertragen.
-- Laufende Änderungen anschließend inkrementell übertragen.
-- Verbindung mit `PING`/`PONG` überwachen.
-- Der Host bleibt die maßgebliche Zustandsquelle.
+- Send `RESET_STATE` after connecting.
+- Always follow it with the complete current state.
+- Send subsequent changes incrementally.
+- Monitor the connection with `PING`/`PONG`.
+- Keep the host as the authoritative state source.
 
-### LED-Anzeige
+### LED display
 
-- Zwei RGB-Augen sind vorgesehen und zeigen vorerst dasselbe an.
-- Die Verdrahtung soll eine spätere unabhängige Steuerung beider Augen erlauben.
-- Beim Start: weicher Verlauf Rot → Gelb → Grün über insgesamt 2,2 Sekunden,
-  500 ms Pause, danach die Akkufarbe 1,5 Sekunden dauerhaft und anschließend
-  eine Sekunde Pause.
-- Bei USB-Versorgung ist der Akkustand auf dem vorhandenen Board nicht messbar;
-  Gelb kennzeichnet dann „unbekannt“.
-- Bis zum Host-Handshake: Blau pulsierend; danach drei kurze blaue Blinker.
-- `RUNNING`: zyklischer Verlauf aus warmem Pink, Violett und Türkisgrün bei
-  15 % relativer Helligkeit. Reine Rot-, Grün- oder Blautöne werden vermieden.
-- `ASKING`: Gelb und Grün als Doppelblitz mit unveränderten Leucht- und Pausenzeiten.
-- `FINISHED`: Grün pulsierend, höchstens 5 Sekunden bis zum Wechsel auf `IDLE`.
-- `IDLE`: erster kurzer grüner Blinker mit 20 % relativer Helligkeit, zweiter mit
-  voller global begrenzter Helligkeit, danach drei Sekunden Pause; dauerhaft
-  wiederholt.
-- Die interne rote Board-LED bleibt deaktiviert.
+- Two RGB eyes are planned and initially mirror each other.
+- Wiring should allow independent control later.
+- Startup: a 2.2-second red-to-yellow-to-green fade, 500 ms off, 1.5 seconds of
+  battery color, and one second off.
+- USB power prevents battery measurement on the tested board, so yellow means
+  “unknown” in that case.
+- Until host handshake: blue pulse; after handshake: three short blue flashes.
+- `RUNNING`: warm pink, violet, and turquoise-green fade at 15% relative
+  brightness; pure primary colors are avoided.
+- `ASKING`: yellow and green double flash.
+- `FINISHED`: green pulse for at most five seconds before `IDLE`.
+- `IDLE`: one short green flash at 20%, one at full globally limited brightness,
+  then a three-second pause.
+- The internal red board LED remains disabled.
 
-Bei einer Gesamtanzeige gilt vorläufig diese Priorität:
+Aggregate status priority:
 
 ```text
 ERROR > ASKING > RUNNING > FINISHED > IDLE > OFF
 ```
 
-## Soll-Funktionen nach dem MVP
+## After the MVP
 
-- Konfigurierbare Farben, Helligkeit und Animationen.
-- Wahlweise Gesamtstatus oder eine LED pro Session.
-- Stabile Zuordnung von Sessions zu LED-Plätzen.
-- Unterscheidung zwischen normaler Frage und Berechtigungsanfrage.
-- Windows-Autostart.
-- Tray-Symbol mit Verbindungs- und OpenCode-Status.
-- Lokale Konfigurationsdatei mit validiertem Schema.
-- Diagnosemodus für Serial- und OpenCode-Events.
-- Verfeinerung der groben Akku-Drittel auf Basis einer gemessenen Entladekurve,
-  mit Hysterese gegen springende Werte.
+- Configurable colors, brightness, and animations.
+- Aggregate status or one LED per session.
+- Stable session-to-LED assignment.
+- Separate indications for questions and permission requests.
+- Windows startup integration and an optional tray icon.
+- Validated local configuration file and privacy-preserving diagnostics.
+- Battery percentages based on a measured discharge curve with hysteresis.
 
-## Optionale spätere Funktionen
+## Possible later features
 
-- Separate Darstellung von Subagenten.
-- Akustisches Signal über den Mikrocontroller.
-- Taster zum Stummschalten oder Quittieren einer Anzeige.
-- OLED-Display mit Session-Namen.
-- Firmware-Update-Unterstützung.
-- Unterstützung mehrerer Anzeigegeräte.
+- Separate subagent display.
+- Sound, acknowledgement button, or OLED display.
+- Firmware update support.
+- Multiple display devices.
 
-## Nicht Teil des ersten MVP
+## Outside the first MVP
 
-- Steuerung oder Beantwortung von OpenCode-Anfragen am Mikrocontroller.
-- Cloud-Verbindung.
-- Speicherung von Prompts oder Session-Inhalten auf dem Mikrocontroller.
-- Vollständige Windows-Dienstinstallation vor erfolgreichem Prototyp.
+- Answering or controlling OpenCode requests from the microcontroller.
+- Cloud connectivity.
+- Storing prompts or session content on the microcontroller.
+- A full Windows service installation before the prototype is validated.
