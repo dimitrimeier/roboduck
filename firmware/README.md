@@ -1,10 +1,11 @@
 # Firmware
 
-Firmware 0.4.0 unterstützt auf dem nice!nano-v2-kompatiblen
+Firmware 0.6.5 unterstützt auf dem nice!nano-v2-kompatiblen
 Pro-Micro-nRF52840-Board gleichzeitig USB-CDC und Bluetooth LE. Beide
-Transportwege verwenden dasselbe Statusprotokoll und steuern die über `P0.15`
-programmierbare Board-LED. Zwei zukünftige RGB-Augen werden bereits logisch
-simuliert, erscheinen auf der einfarbigen Board-LED aber nur als Helligkeit.
+Transportwege verwenden dasselbe Statusprotokoll. Die über `P0.15`
+programmierbare interne rote Board-LED ist deaktiviert. Die Firmware steuert das
+erste externe Common-Cathode-RGB-Auge über drei Hardware-PWM-Kanäle. Ein zweites Auge wird
+weiterhin logisch gespiegelt, ist aber noch nicht elektrisch angeschlossen.
 
 ## Hardware
 
@@ -24,36 +25,39 @@ ist nicht als normale GPIO-Status-LED steuerbar. Diese Farbzuordnung ist
 gegenüber einem originalen nice!nano vertauscht. Das blaue Blinken ohne Akku
 wird nicht von Bluetooth verursacht.
 
-## Unterstützte Anzeige auf einer einfarbigen Board-LED
+## Statusanzeige auf dem externen RGB-Auge
 
 | Zustand | Muster |
 |---|---|
 | `OFF` | aus |
-| `IDLE` | schwach an |
-| `FINISHED` | dauerhaft an |
-| `RUNNING` | langsam pulsierend |
-| `ASKING` | Doppelblitz |
-| `ERROR` | schnell blinkend |
+| `IDLE` | kurz grün mit 20 %, danach kurz grün mit voller global begrenzter Helligkeit, dann 3 s Pause |
+| `FINISHED` | grün pulsierend |
+| `RUNNING` | warmes Pink → Violett → Türkisgrün als weicher Verlauf bei 15 % relativer Helligkeit |
+| `ASKING` | erst gelber, dann grüner Blitz; bisheriges Timing bleibt erhalten |
+| `ERROR` | schnell rot blinkend |
 
-Farben werden erst mit den externen LEDs ergänzt.
+Die interne rote Board-LED bleibt in allen Phasen aus.
 
 ## Simulierter Start- und Verbindungsablauf
 
-Firmware 0.4.0 rendert nicht blockierend folgenden Ablauf für beide Augen
+Firmware 0.6.5 rendert nicht blockierend folgenden Ablauf für beide Augen
 identisch:
 
-1. Rot, Gelb und Grün werden je 600 ms angezeigt, mit je 200 ms Pause.
-2. Der beim Start über `VDDH/5` gemessene Versorgungswert wird dreimal langsam
-   in seiner Akkufarbe geblinkt (600 ms an, 600 ms aus):
+1. Rot geht innerhalb von 1,1 Sekunden weich in Gelb und anschließend innerhalb
+   weiterer 1,1 Sekunden weich in Grün über. Es gibt keine dunklen
+   Zwischenpausen.
+2. Nach Grün bleibt die Anzeige 500 ms aus.
+3. Der beim Start über `VDDH/5` gemessene Versorgungswert wird 1,5 Sekunden
+   dauerhaft in seiner Akkufarbe angezeigt:
    - Rot unter 3,60 V
    - Gelb von 3,60 V bis unter 3,90 V
    - Grün ab 3,90 V
    - Gelb als „unbekannt“, wenn über 4,40 V eine USB-Versorgung erkannt wird
-3. Blau pulsiert, bis ein gültiger `HELLO 1`-Handshake über USB oder BLE
+4. Danach bleibt die Anzeige eine Sekunde aus.
+5. Blau pulsiert, bis ein gültiger `HELLO 1`-Handshake über USB oder BLE
    empfangen wurde.
-4. Drei kurze blaue Blinker bestätigen die Verbindung.
-5. Danach gelten die vorhandenen Statusmuster. Deren endgültige RGB-Farben sind
-   bewusst noch ein TODO.
+6. Drei kurze blaue Blinker bestätigen die Verbindung.
+7. Danach gelten die oben beschriebenen RGB-Statusmuster.
 
 Bei 15 Sekunden ohne Hostaktivität wird kein alter Status weiter angezeigt;
 die Firmware kehrt stattdessen zum blauen Verbindungspulsieren zurück. Ein
@@ -107,12 +111,13 @@ PING
 BATTERY
 SUPPLY
 DISPLAY
+DISPLAY_DEMO
 ```
 
 Der Handshake antwortet beispielsweise mit:
 
 ```text
-DEVICE OPENCODE_STATUS protocol=1 firmware=0.4.0 leds=1
+DEVICE OPENCODE_STATUS protocol=1 firmware=0.6.5 leds=1
 ```
 
 Die maximale Befehlslänge beträgt 95 Byte ohne Zeilenende. Unbekannte oder
@@ -168,11 +173,18 @@ DISPLAY phase=CONNECTING battery=HIGH supply_mv=4230 rgb=0,0,147
 Die Werte beschreiben die aktuell simulierte Farbe vor Anwendung der globalen
 Helligkeit. Beide zukünftigen Augen verwenden vorerst denselben Wert.
 
+`DISPLAY_DEMO` startet den vollständigen Diagnoseablauf erneut. Im Demomodus
+bleibt die blaue Verbindungssuche unabhängig von der bereits für die Diagnose
+benötigten Verbindung drei Sekunden sichtbar. Danach folgen die drei kurzen
+Verbindungsblinker und der Wechsel zum Status. Der Befehl blockiert weder den
+Parser noch USB oder BLE.
+
 Nach einem erfolgreichen Host-Befehl erwartet die Firmware spätestens nach 15
 Sekunden weitere Aktivität. Bleiben Statusbefehle und `PING` aus, wechselt die
-Anzeige selbstständig auf `OFF`. Dadurch bleibt nach einem Host-Absturz kein
-veralteter Agentenstatus dauerhaft sichtbar. Dieses Verhalten wurde am realen
-Board praktisch bestätigt.
+Anzeige selbstständig zum blauen Verbindungspulsieren. Dadurch bleibt nach
+einem Host-Absturz kein veralteter Agentenstatus dauerhaft sichtbar. Der frühere
+Rückfall auf `OFF` wurde am realen Board bestätigt; die neue RGB-Suchanzeige ist
+bis zur externen Verdrahtung nur per `DISPLAY` und Board-LED simulierbar.
 
 ## Bluetooth LE
 
@@ -204,6 +216,19 @@ Nach dem Flashen in PowerShell aus dem Repository-Stamm ausführen:
 ./firmware/tools/Test-StatusLight.ps1
 ```
 
+Vor dem Verdrahten lässt sich der simulierte RGB-Ablauf als zeitgestempeltes
+Protokoll ansehen. Dazu die Host Bridge beenden, damit sie den COM-Port nicht
+belegt, und aus dem Repository-Stamm ausführen:
+
+```powershell
+./firmware/tools/Watch-DisplayPhases.ps1
+```
+
+Das Skript filtert ebenfalls zuerst über die bestätigte USB-Kennung, führt den
+Handshake aus, startet `DISPLAY_DEMO` und fragt anschließend nur `DISPLAY` ab.
+Es sendet keine Befehle an ungeprüfte Serialgeräte und enthält keine fest
+codierte COM-Port-Nummer.
+
 Das Skript verwendet keine fest codierte COM-Port-Nummer. Es filtert zuerst
 nach der USB-Kennung der nice!nano-Anwendungsfirmware, bestätigt das Gerät per
 `HELLO`-Handshake, prüft gültige sowie ungültige Befehle und durchläuft erst
@@ -221,8 +246,34 @@ Jeder der sechs Farbkanäle benötigt einen eigenen Vorwiderstand; auch identisc
 angesteuerte Kanäle dürfen keinen gemeinsamen Widerstand verwenden. Die beiden
 gemeinsamen Kathoden kommen an Masse. Konkrete GPIO-Pins, Widerstände und eine
 eventuell nötige Treiberstufe werden erst nach Vorliegen von Durchlassspannung
-und gewünschtem Strom je Farbe festgelegt. Die GPIO-Logik arbeitet mit 3,3 V;
+je Farbe festgelegt. Als vorläufiger Auslegungspunkt gelten 10 mA je Farbkanal
+bei 100 % PWM, also maximal 60 mA für alle sechs gleichzeitig eingeschalteten
+Kanäle. Die GPIO-Logik arbeitet mit 3,3 V;
 ein Kanal mit bis zu 4 V Durchlassspannung kann daran nicht zuverlässig
 leuchten. Direktansteuerung ist nur bei einem für das nRF52840 sicheren kleinen
-Kanal- und Gesamtstrom zulässig; andernfalls werden geeignete Source-Treiber
-verwendet.
+Kanal- und Gesamtstrom zulässig. Für 10 mA werden geeignete Source-Treiber
+eingeplant; die GPIOs liefern nur die PWM-Steuersignale.
+
+### Aktueller Anschluss des ersten Auges
+
+Firmware 0.5.0 verwendet folgende bestätigte `nicenano`-Pins:
+
+| Kanal | Board-Pin | nRF52840 | Anschluss |
+|---|---|---|---|
+| Rot | `D104` / `104` | `P1.04` | GPIO → Widerstand → rote Anode |
+| Grün | `D106` / `106` | `P1.06` | GPIO → Widerstand → grüne Anode |
+| Blau | `D011` / `011` | `P0.11` | GPIO → Widerstand → blaue Anode |
+| gemeinsam | `GND` | Masse | gemeinsame Kathode |
+
+Die externe LED verwendet drei Kanäle von `PWM0` mit 2 ms Periode. Die interne
+rote Board-LED wird nicht an PWM angebunden und bleibt als GPIO ausgeschaltet.
+Die drei RGB-Kanäle sind nicht invertiert: 0 ist aus. Seit Firmware 0.6.2 ist
+die physische Ausgabe global auf etwa 65 % begrenzt. `BRIGHTNESS 255` erreicht
+daher höchstens 166 von 255 Ausgangsstufen; kleinere Helligkeiten werden
+proportional skaliert.
+Diese Grenze gilt auch für Start-, Akku-, Verbindungs- und Statusanzeige. Die
+Vorwiderstände bleiben die maßgebliche Strombegrenzung.
+
+Dieser erste Aufbau ist ein direkter Funktionstest ohne Source-Treiber und darf
+nicht als 10-mA-Endschaltung verstanden werden. Mit den vorbereiteten
+Widerständen wird bewusst unterhalb dieses späteren Auslegungspunkts getestet.

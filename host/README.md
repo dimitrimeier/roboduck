@@ -52,11 +52,12 @@ und abgeleitete Zustände.
 
 ## Konfiguration
 
-Die Dauer des Zustands `FINISHED` beträgt standardmäßig 60 Sekunden. Für einen
-kurzen Test kann sie über eine Umgebungsvariable geändert werden:
+Die Dauer des Zustands `FINISHED` beträgt standardmäßig fünf Sekunden und ist
+fest auf maximal fünf Sekunden begrenzt. Für einen kürzeren Test kann sie über
+eine Umgebungsvariable geändert werden:
 
 ```powershell
-$env:OPENCODE_STATUS_FINISHED_HOLD_MS = "5000"
+$env:OPENCODE_STATUS_FINISHED_HOLD_MS = "2000"
 npm run dev
 ```
 
@@ -77,7 +78,8 @@ Bei einer erkannten Abweichung entstehen synthetische Events:
 
 Unveränderte Poll-Ergebnisse erzeugen weder Events noch Logausgaben. Eine
 Session in `FINISHED` bleibt zunächst für ihre konfigurierte Haltezeit sichtbar
-und wird erst danach durch die Abstimmung entfernt.
+und wechselt danach zu `IDLE`. Bekannte Idle-Sessions bleiben erhalten, auch
+wenn sie nicht mehr im aktiven Snapshot auftauchen.
 
 Die LED-Helligkeit liegt standardmäßig bei 128 von 255:
 

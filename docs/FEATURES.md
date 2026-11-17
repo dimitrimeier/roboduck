@@ -38,12 +38,20 @@
 
 - Zwei RGB-Augen sind vorgesehen und zeigen vorerst dasselbe an.
 - Die Verdrahtung soll eine spätere unabhängige Steuerung beider Augen erlauben.
-- Beim Start: Rot, Gelb und Grün als Funktionstest, danach drei langsame Blinker
-  in Rot/Gelb/Grün für das gemessene Akkudrittel.
+- Beim Start: weicher Verlauf Rot → Gelb → Grün über insgesamt 2,2 Sekunden,
+  500 ms Pause, danach die Akkufarbe 1,5 Sekunden dauerhaft und anschließend
+  eine Sekunde Pause.
 - Bei USB-Versorgung ist der Akkustand auf dem vorhandenen Board nicht messbar;
   Gelb kennzeichnet dann „unbekannt“.
 - Bis zum Host-Handshake: Blau pulsierend; danach drei kurze blaue Blinker.
-- Die endgültigen RGB-Farben der OpenCode-Zustände sind noch festzulegen.
+- `RUNNING`: zyklischer Verlauf aus warmem Pink, Violett und Türkisgrün bei
+  15 % relativer Helligkeit. Reine Rot-, Grün- oder Blautöne werden vermieden.
+- `ASKING`: Gelb und Grün als Doppelblitz mit unveränderten Leucht- und Pausenzeiten.
+- `FINISHED`: Grün pulsierend, höchstens 5 Sekunden bis zum Wechsel auf `IDLE`.
+- `IDLE`: erster kurzer grüner Blinker mit 20 % relativer Helligkeit, zweiter mit
+  voller global begrenzter Helligkeit, danach drei Sekunden Pause; dauerhaft
+  wiederholt.
+- Die interne rote Board-LED bleibt deaktiviert.
 
 Bei einer Gesamtanzeige gilt vorläufig diese Priorität:
 

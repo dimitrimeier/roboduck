@@ -61,15 +61,18 @@ Synchronisation bereit.
   Differenzen werden als interne Events `host.session.inactive` bzw.
   `host.session.reconciled` weitergegeben.
 - Ein fehlender Snapshot-Eintrag entfernt `FINISHED` nicht vor Ablauf seiner
-  Haltezeit. Nach dem Wechsel zu `IDLE` entfernt der nächste Poll die Session.
+  Haltezeit. Nach dem Wechsel zu `IDLE` bleibt die bekannte Session erhalten,
+  damit längere Inaktivität weiterhin sichtbar ist. Explizite Lösch- oder
+  Archivierungsereignisse entfernen sie weiterhin.
 - Die relevanten OpenCode-Endpunkte sind teilweise experimentell; Updates
   können Anpassungen notwendig machen.
 
 ### Zustandsverwaltung
 
 Der Host hält einen Zustand pro Session und leitet daraus den anzuzeigenden
-Gesamtzustand oder einzelne LED-Zustände ab. `FINISHED` wird für eine
-konfigurierbare Zeit gehalten und wechselt danach zu `IDLE`.
+Gesamtzustand oder einzelne LED-Zustände ab. `FINISHED` wird höchstens fünf
+Sekunden gehalten und wechselt danach zu `IDLE`. Die Haltezeit kann nur auf
+einen kürzeren Wert konfiguriert werden.
 
 Die Zustandsverwaltung ist unabhängig von der Geräteverbindung. Dadurch kann
 ein neu angeschlossenes Gerät sofort vollständig synchronisiert werden.
@@ -145,6 +148,7 @@ PING
 BATTERY
 SUPPLY
 DISPLAY
+DISPLAY_DEMO
 ```
 
 Unterstützte Antworten:
@@ -167,12 +171,32 @@ Verdrahtung. `supply_mv` wird mit dem am realen Board gegen ein Multimeter
 bestimmten Faktor `4230/4295` kalibriert.
 
 Der LED-Renderer besitzt vor dem eigentlichen Hoststatus eigene, nicht
-blockierende Phasen: RGB-Funktionstest, Akku-Drittel, blaues
-Verbindungspulsieren und drei kurze Verbindungsblinker. `DISPLAY` erlaubt die
+blockierende Phasen: weicher 2,2-sekündiger Rot-Gelb-Grün-Funktionstest, 500 ms
+Pause, 1,5 Sekunden dauerhafte Akkuanzeige, eine Sekunde Pause, blaues
+Verbindungspulsieren und drei kurze
+Verbindungsblinker. `DISPLAY` erlaubt die
 Diagnose der simulierten RGB-Ausgabe. Beide geplanten RGB-Augen werden zunächst
 gespiegelt; sechs getrennte PWM-Kanäle halten eine spätere unabhängige
-Ansteuerung ohne Neuverdrahtung offen. Die endgültigen Statusfarben bleiben ein
-TODO.
+Ansteuerung ohne Neuverdrahtung offen. `RUNNING` zeigt einen zyklischen Verlauf
+aus warmem Pink, Violett und Türkisgrün bei 15 Prozent relativer Helligkeit;
+reine RGB-Grundfarben werden bewusst vermieden. `ASKING` blinkt mit
+unverändertem Timing erst gelb und dann grün, `FINISHED` pulsiert grün und
+`IDLE` wiederholt einen kurzen grünen Blinker mit 20 Prozent relativer
+Helligkeit und einen zweiten mit voller global begrenzter Helligkeit, gefolgt
+von drei Sekunden Pause.
+`DISPLAY_DEMO` spielt dieselben Phasen zu Diagnosezwecken erneut ab und
+hält die simulierte Verbindungssuche dabei drei Sekunden, ohne den normalen
+USB-/BLE-Protokollablauf zu blockieren.
+
+Seit Firmware 0.5.0 wird das erste Common-Cathode-RGB-Auge real über `D104`
+(`P1.04`, Rot), `D106` (`P1.06`, Grün) und `D011` (`P0.11`, Blau) angesteuert.
+Die gemeinsame Kathode liegt an GND. Die drei Ausgänge nutzen drei Kanäle von
+`PWM0`; die interne rote LED an `P0.15` ist deaktiviert. Der zweite RGB-Ausgang benötigt später
+ein weiteres PWM-Peripheral und getrennte Pins.
+
+Vor dem Schreiben in die PWM-Kanäle werden Farbe, konfigurierbare Helligkeit und
+eine feste globale Ausgangsgrenze multipliziert. Seit Firmware 0.6.2 beträgt
+diese Grenze etwa 65 Prozent und gilt identisch für alle externen RGB-Kanäle.
 
 Ein Protokollparser darf unbekannte Befehle nicht als gültig bestätigen. Die
 maximale Zeilenlänge und Timeouts werden bei der Firmware-Implementierung

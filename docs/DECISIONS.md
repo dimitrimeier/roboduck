@@ -122,13 +122,14 @@ Arduino CLI 1.6.0 wegen seines Paketnamens keinen gültigen FQBN und wird daher
 nicht zur Projektbasis. Vor dem Bluetooth-Ausbau wird TinyGos nRF52-BLE-Support
 gesondert praktisch bewertet.
 
-## 2026-11-16 – Anzeige fällt ohne Hostaktivität auf OFF zurück
+## 2026-11-16 – Anzeige verwirft Status ohne Hostaktivität
 
-**Status:** Angenommen
+**Status:** Erweitert durch Start- und Verbindungsanzeige in Firmware 0.4.0
 
 Die Host Bridge überwacht die gewählte USB- oder BLE-Verbindung alle fünf
 Sekunden mit `PING`/`PONG`. Empfängt die Firmware 15 Sekunden lang weder einen
-Statusbefehl noch einen Ping, setzt sie die Anzeige selbstständig auf `OFF`.
+Statusbefehl noch einen Ping, verwirft sie den alten Status. Seit Firmware 0.4.0
+zeigt sie danach das blaue Verbindungspulsieren statt `OFF`.
 
 **Begründung:** Der Host bleibt die maßgebliche Zustandsquelle. Bei einem
 Host-Absturz oder einer unterbrochenen USB-Verbindung darf die Firmware einen
@@ -211,7 +212,10 @@ steuerbar. Jeder der sechs Kanäle erhält einen eigenen Vorwiderstand.
 **Begründung:** Gemeinsam verdrahtete Farbkanäle würden GPIOs sparen, eine
 spätere unabhängige Darstellung aber nur durch Neuverdrahtung ermöglichen.
 Konkrete Pins, Widerstände und Treiber hängen noch von Durchlassspannung und
-gewünschtem Kanalstrom der LEDs ab.
+Versorgungsspannung ab. Als vorläufige maximale Helligkeit werden 10 mA je
+Farbkanal bei 100 % PWM ausgelegt. Bei sechs gleichzeitig aktiven Kanälen sind
+das maximal 60 mA LED-Strom; die GPIOs liefern deshalb nur Steuersignale für
+geeignete Source-Treiber.
 
 ## 2026-11-16 – Start- und Verbindungsanzeige in der Firmware
 
@@ -228,3 +232,115 @@ Host-Timeout kehrt die Anzeige in die Verbindungssuche zurück.
 Transportaktivität unmittelbar und kann diese Phasen ohne Hostverbindung
 anzeigen. Der Host bleibt weiterhin alleinige Quelle des nachfolgenden
 OpenCode-Status. Die Statusfarben selbst werden später festgelegt.
+
+## 2026-11-17 – Pinbelegung des ersten RGB-Auges
+
+**Status:** Angenommen
+
+Das erste Common-Cathode-RGB-Auge verwendet `D104` (`P1.04`) für Rot, `D106`
+(`P1.06`) für Grün und `D011` (`P0.11`) für Blau. Die gemeinsame Kathode liegt
+an GND. Jeder Kanal besitzt einen eigenen Vorwiderstand und wird nicht
+invertiert per Hardware-PWM angesteuert.
+
+**Begründung:** Die drei Pins sind beim installierten TinyGo-`nicenano`-Target
+als allgemeine GPIOs bestätigt und kollidieren weder mit USB, Akku-ADC noch der
+Board-LED. Zusammen mit `P0.15` nutzen sie exakt die vier Kanäle von `PWM0`.
+Der direkte Aufbau dient zunächst nur dem stromreduzierten Funktionstest; die
+spätere 10-mA-Auslegung erhält weiterhin Source-Treiber.
+
+## 2026-11-17 – Globale LED-Ausgabe auf 80 Prozent begrenzt
+
+**Status:** Angenommen
+
+Firmware 0.5.1 reduziert jede physische PWM-Ausgabe global um 20 Prozent. Der
+höchste mögliche Tastgrad beträgt damit auch bei `BRIGHTNESS 255` nur 80 Prozent.
+Die Skalierung gilt einheitlich für externe RGB-Kanäle, Board-LED, Startsequenz,
+Akkuanzeige, Verbindungsmuster und Statusanzeige.
+
+**Begründung:** Das erste externe RGB-Auge war im realen Aufbau zu hell. Eine
+zentrale Grenze erhält alle relativen Farb- und Animationsverläufe und verhindert,
+dass ein späterer Helligkeitsbefehl versehentlich wieder 100 Prozent ausgibt.
+
+## 2026-11-17 – Globale LED-Ausgabe auf 65 Prozent reduziert
+
+**Status:** Angenommen; ersetzt die 80-Prozent-Grenze
+
+Firmware 0.6.2 begrenzt jede physische PWM-Ausgabe global auf etwa 65 Prozent
+beziehungsweise 166 von 255 Ausgangsstufen. Die Grenze gilt für Start-, Akku-,
+Verbindungs- und sämtliche Statusanzeigen. Die zusätzliche relative
+15-Prozent-Grenze für `RUNNING` bleibt bestehen.
+
+**Begründung:** Die gesamte externe RGB-Anzeige soll gegenüber der bisherigen
+80-Prozent-Grenze weiter abgedunkelt werden, ohne Farbverhältnisse oder
+Animationstiming zu verändern.
+
+## 2026-11-17 – RGB-Funktionstest mit weichen Farbübergängen
+
+**Status:** Angenommen
+
+Firmware 0.6.3 ersetzt die getrennten Farben und dunklen Zwischenpausen des
+initialen Funktionstests durch einen kontinuierlichen Verlauf. Rot geht in
+1,1 Sekunden in Gelb und Gelb anschließend in weiteren 1,1 Sekunden in Grün
+über. Die Gesamtdauer von 2,2 Sekunden bleibt unverändert; die nachfolgende
+500-ms-Pause und Akkuanzeige ändern sich nicht.
+
+**Begründung:** Der weich interpolierte Verlauf wirkt ruhiger und zeigt dennoch
+alle drei RGB-Kanäle sowie deren Mischbetrieb während der Initialisierung.
+
+## 2026-11-17 – Neuer Initialisierungs- und RGB-Statusablauf
+
+**Status:** Angenommen; ersetzt die Akku-Blinkfolge und vorläufigen Statusmuster
+
+Firmware 0.6.0 zeigt nach Rot, Gelb und Grün 500 ms Dunkelheit, anschließend
+die Akkufarbe 1,5 Sekunden dauerhaft und danach eine weitere Sekunde Dunkelheit,
+bevor die Verbindungsphase beginnt. Die interne rote Board-LED an `P0.15` bleibt
+vollständig deaktiviert.
+
+Im Hoststatus läuft `RUNNING` als Verlauf aus warmem Pink, Violett und
+Türkisgrün bei 15 Prozent relativer Helligkeit. `ASKING` behält die bisherigen
+zwei 120-ms-Leuchtfenster und Pausen,
+verwendet aber Gelb und Grün. `FINISHED` pulsiert grün, bis der Host zu `IDLE`
+wechselt. `IDLE` wiederholt zwei kurze grüne Blinker mit drei Sekunden Pause.
+Bekannte Idle-Sessions bleiben auch dann erhalten, wenn der aktive Snapshot sie
+nicht mehr enthält; explizites Löschen oder Archivieren beendet die Anzeige.
+
+**Begründung:** Die Startfolge trennt Funktionstest, Akkuzustand und Verbindung
+klar voneinander. Die neuen Statusmuster bleiben auch bei längerer Inaktivität
+erkennbar und unterscheiden Arbeit, Rückfrage und Abschluss farblich eindeutig.
+
+## 2026-11-17 – FINISHED auf maximal fünf Sekunden begrenzt
+
+**Status:** Angenommen
+
+Der Host hält `FINISHED` standardmäßig und maximal fünf Sekunden. Die optionale
+Umgebungsvariable darf eine kürzere Dauer festlegen; höhere Werte werden auf
+fünf Sekunden begrenzt. Danach wechselt der Zustand zu `IDLE` und damit zum
+dauerhaften grünen Doppelblinkmuster.
+
+**Begründung:** Der pulsierende Abschluss soll deutlich sichtbar sein, aber die
+anschließende Bereitschaftsanzeige nicht länger als fünf Sekunden verzögern.
+
+## 2026-11-17 – RUNNING verwendet ausschließlich Mischfarben
+
+**Status:** Angenommen
+
+Firmware 0.6.4 ersetzt die reinen roten, blauen und grünen Wendepunkte des
+`RUNNING`-Verlaufs durch warmes Pink (`255,48,112`), Violett (`112,48,255`) und
+Türkisgrün (`48,255,144`). Zwischen diesen Farben wird weiterhin weich
+interpoliert; dadurch sind auch an jedem Wendepunkt mehrere Kanäle aktiv.
+
+**Begründung:** Reine Grundfarben besitzen in Start-, Akku-, Verbindungs- und
+anderen Statusphasen eigene Bedeutungen. Ausschließliche Mischfarben verhindern
+eine Fehlinterpretation des laufenden Arbeitszustands.
+
+## 2026-11-17 – Gestufte Helligkeit beim Idle-Doppelblinken
+
+**Status:** Angenommen
+
+Firmware 0.6.5 zeigt den ersten grünen Idle-Blinker mit 20 Prozent relativer
+Helligkeit und den zweiten mit voller logischer Helligkeit. Auf beide wird die
+globale Ausgangsgrenze angewendet. Leuchtdauer, Zwischenpause und anschließende
+drei Sekunden Pause bleiben unverändert.
+
+**Begründung:** Die ansteigende Helligkeit macht das Idle-Signal markanter, ohne
+die ruhige Wiederholungsfrequenz oder die globale Helligkeitsbegrenzung zu ändern.

@@ -58,7 +58,7 @@ describe("reconcileSnapshot", () => {
     ]);
   });
 
-  it("removes a finished session only after its hold period has expired", () => {
+  it("retains a finished session as idle after its hold period has expired", () => {
     let now = 1_000;
     const store = new StatusStore({
       finishedHoldMs: 5_000,
@@ -79,8 +79,12 @@ describe("reconcileSnapshot", () => {
       store.apply(event);
     }
 
-    assert.equal(store.view().overallStatus, "off");
-    assert.equal(events[0]?.type, "host.session.inactive");
+    assert.equal(store.view().overallStatus, "idle");
+    assert.deepEqual(events, []);
+  });
+
+  it("preserves known idle sessions omitted by the active-session snapshot", () => {
+    assert.deepEqual(reconcileSnapshot(view("idle"), emptySnapshot()), []);
   });
 });
 
@@ -88,7 +92,7 @@ function emptySnapshot(): SourceSnapshot {
   return { capturedAt: 200, sessions: [] };
 }
 
-function view(status: "running" | "finished"): StatusView {
+function view(status: "running" | "finished" | "idle"): StatusView {
   return {
     overallStatus: status,
     sessions: [
@@ -99,7 +103,11 @@ function view(status: "running" | "finished"): StatusView {
         pendingAttention: [],
         updatedAt: 100,
         lastEventType:
-          status === "running" ? "session.execution.started" : "session.execution.succeeded",
+          status === "running"
+            ? "session.execution.started"
+            : status === "finished"
+              ? "session.execution.succeeded"
+              : "timer",
       },
     ],
   };

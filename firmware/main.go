@@ -8,21 +8,26 @@ import (
 )
 
 const (
-	protocolVersion = "1"
-	firmwareVersion = "0.4.0"
-	lineBufferSize  = 96
-	hostTimeout     = 15 * time.Second
-	batteryADCMax   = 65520
-	batteryADCMV    = 3000
-	startupColorOn  = 600 * time.Millisecond
-	startupColorOff = 200 * time.Millisecond
-	batteryBlinkOn  = 600 * time.Millisecond
-	batteryBlinkOff = 600 * time.Millisecond
-	connectFlashOn  = 120 * time.Millisecond
-	connectFlashOff = 120 * time.Millisecond
-	usbThresholdMV  = 4400
-	batteryThird1MV = 3600
-	batteryThird2MV = 3900
+	protocolVersion        = "1"
+	firmwareVersion        = "0.6.5"
+	lineBufferSize         = 96
+	hostTimeout            = 15 * time.Second
+	batteryADCMax          = 65520
+	batteryADCMV           = 3000
+	startupGradientSegment = 1100 * time.Millisecond
+	startupDuration        = 2 * startupGradientSegment
+	startupPause           = 500 * time.Millisecond
+	batteryDisplay         = 1500 * time.Millisecond
+	batteryPause           = time.Second
+	connectFlashOn         = 120 * time.Millisecond
+	connectFlashOff        = 120 * time.Millisecond
+	demoConnecting         = 3 * time.Second
+	usbThresholdMV         = 4400
+	batteryThird1MV        = 3600
+	batteryThird2MV        = 3900
+	globalOutputMax        = 166 // 65% of 255, rounded to the nearest 8-bit value.
+	runningOutputMax       = 38  // 15% of 255, rounded down.
+	idleFirstFlashMax      = 51  // 20% of 255.
 	// The real board reported 4295 mV while a multimeter measured 4230 mV.
 	supplyCalibrationNumerator   = 4230
 	supplyCalibrationDenominator = 4295
@@ -45,7 +50,9 @@ type displayPhase uint8
 
 const (
 	phaseStartupColors displayPhase = iota
+	phaseStartupPause
 	phaseBatteryLevel
+	phaseBatteryPause
 	phaseConnecting
 	phaseConnectionConfirmed
 	phaseStatus
@@ -72,88 +79,135 @@ var (
 	colorYellow = rgbColor{red: 255, green: 128}
 	colorGreen  = rgbColor{green: 255}
 	colorBlue   = rgbColor{blue: 255}
-	colorWhite  = rgbColor{red: 255, green: 255, blue: 255}
+	// RUNNING deliberately avoids pure red, green, and blue so its animation
+	// cannot be confused with the single-color startup and status signals.
+	colorRunningPink      = rgbColor{red: 255, green: 48, blue: 112}
+	colorRunningViolet    = rgbColor{red: 112, green: 48, blue: 255}
+	colorRunningTurquoise = rgbColor{red: 48, green: 255, blue: 144}
 )
 
 type ledRenderer struct {
-	pwm        *machine.PWM
-	channel    uint8
-	brightness uint8
+	pwm          *machine.PWM
+	redChannel   uint8
+	greenChannel uint8
+	blueChannel  uint8
+	brightness   uint8
 }
 
 func newLEDRenderer() (*ledRenderer, error) {
+	// Keep the clone's internal red user LED disabled. Only the external RGB
+	// channels are part of the status display.
+	machine.LED.Configure(machine.PinConfig{Mode: machine.PinOutput})
+	machine.LED.Set(false)
+
 	pwm := machine.PWM0
 	if err := pwm.Configure(machine.PWMConfig{Period: uint64(2 * time.Millisecond)}); err != nil {
 		return nil, err
 	}
 
-	channel, err := pwm.Channel(machine.LED)
+	redChannel, err := pwm.Channel(machine.D104)
+	if err != nil {
+		return nil, err
+	}
+	greenChannel, err := pwm.Channel(machine.D106)
+	if err != nil {
+		return nil, err
+	}
+	blueChannel, err := pwm.Channel(machine.D011)
 	if err != nil {
 		return nil, err
 	}
 
 	renderer := &ledRenderer{
-		pwm:        pwm,
-		channel:    channel,
-		brightness: 96,
+		pwm:          pwm,
+		redChannel:   redChannel,
+		greenChannel: greenChannel,
+		blueChannel:  blueChannel,
+		brightness:   96,
 	}
-	renderer.write(0)
+	renderer.renderRGB(colorOff)
 	return renderer, nil
 }
 
-func (renderer *ledRenderer) write(level uint8) {
+func (renderer *ledRenderer) write(channel uint8, level uint8) {
 	top := renderer.pwm.Top()
-	scaled := uint32(uint64(level) * uint64(renderer.brightness) * uint64(top) / (255 * 255))
-	renderer.pwm.Set(renderer.channel, scaled)
+	scaled := uint32(uint64(level) * uint64(renderer.brightness) * globalOutputMax * uint64(top) /
+		(255 * 255 * 255))
+	renderer.pwm.Set(channel, scaled)
 }
 
-// renderRGB simulates both future RGB eyes on the existing one-color board LED.
-// The brightest RGB channel is rendered; DISPLAY exposes the actual RGB values.
 func (renderer *ledRenderer) renderRGB(color rgbColor) {
-	level := color.red
-	if color.green > level {
-		level = color.green
-	}
-	if color.blue > level {
-		level = color.blue
-	}
-	renderer.write(level)
+	renderer.write(renderer.redChannel, color.red)
+	renderer.write(renderer.greenChannel, color.green)
+	renderer.write(renderer.blueChannel, color.blue)
 }
 
 func renderStatus(state displayState, now time.Duration) rgbColor {
-	// TODO: Define the status colors together with the final RGB behavior.
-	// Until then, preserve the existing one-color animation patterns.
 	switch state {
 	case stateOff:
 		return colorOff
 	case stateIdle:
-		return scaleColor(colorWhite, 24)
-	case stateFinished:
-		return colorWhite
-	case stateRunning:
-		const period = 1600 * time.Millisecond
-		const halfPeriod = period / 2
-		phase := now % period
-		triangle := phase
-		if phase >= halfPeriod {
-			triangle = period - phase
+		// Two short green flashes followed by a full three-second pause.
+		const flashOn = 120 * time.Millisecond
+		const flashOff = 120 * time.Millisecond
+		const longPause = 3 * time.Second
+		phase := now % (2*flashOn + flashOff + longPause)
+		if phase < flashOn {
+			return scaleColor(colorGreen, idleFirstFlashMax)
 		}
-		level := 32 + uint8(223*triangle/halfPeriod)
-		return scaleColor(colorWhite, level)
+		if phase >= flashOn+flashOff && phase < 2*flashOn+flashOff {
+			return colorGreen
+		}
+		return colorOff
+	case stateFinished:
+		return scaleColor(colorGreen, pulseLevel(now))
+	case stateRunning:
+		return runningGradient(now)
 	case stateAsking:
 		phase := now % time.Second
-		on := phase < 120*time.Millisecond || (phase >= 220*time.Millisecond && phase < 340*time.Millisecond)
-		if on {
-			return colorWhite
+		if phase < 120*time.Millisecond {
+			return colorYellow
+		}
+		if phase >= 220*time.Millisecond && phase < 340*time.Millisecond {
+			return colorGreen
 		}
 		return colorOff
 	case stateError:
 		if now%(300*time.Millisecond) < 150*time.Millisecond {
-			return colorWhite
+			return colorRed
 		}
 		return colorOff
 	}
 	return colorOff
+}
+
+func runningGradient(elapsed time.Duration) rgbColor {
+	const segment = 1600 * time.Millisecond
+	const period = 3 * segment
+	phase := elapsed % period
+	var color rgbColor
+	if phase < segment {
+		color = mixColor(colorRunningPink, colorRunningViolet, phase, segment)
+	} else if phase < 2*segment {
+		color = mixColor(colorRunningViolet, colorRunningTurquoise, phase-segment, segment)
+	} else {
+		color = mixColor(colorRunningTurquoise, colorRunningPink, phase-2*segment, segment)
+	}
+	return scaleColor(color, runningOutputMax)
+}
+
+func mixColor(from rgbColor, to rgbColor, elapsed time.Duration, duration time.Duration) rgbColor {
+	return rgbColor{
+		red:   mixChannel(from.red, to.red, elapsed, duration),
+		green: mixChannel(from.green, to.green, elapsed, duration),
+		blue:  mixChannel(from.blue, to.blue, elapsed, duration),
+	}
+}
+
+func mixChannel(from uint8, to uint8, elapsed time.Duration, duration time.Duration) uint8 {
+	start := int64(from)
+	delta := int64(to) - start
+	return uint8(start + delta*int64(elapsed)/int64(duration))
 }
 
 func scaleColor(color rgbColor, level uint8) rgbColor {
@@ -169,10 +223,12 @@ type controller struct {
 	battery        *machine.ADC
 	supply         *machine.ADC
 	state          displayState
+	stateStarted   time.Time
 	phase          displayPhase
 	phaseStarted   time.Time
 	batteryLevel   batteryLevel
 	supplyMV       uint32
+	displayDemo    bool
 	serialReceiver lineReceiver
 	bleReceiver    lineReceiver
 	bleTX          bluetoothCharacteristic
@@ -259,6 +315,7 @@ func (device *controller) processLine(line string, now time.Time, writer respons
 		}
 		device.touch(now)
 		device.state = stateOff
+		device.stateStarted = now
 		writer("OK")
 
 	case "SET":
@@ -276,7 +333,10 @@ func (device *controller) processLine(line string, now time.Time, writer respons
 			return
 		}
 		device.touch(now)
-		device.state = nextState
+		if device.state != nextState {
+			device.state = nextState
+			device.stateStarted = now
+		}
 		writer("OK")
 
 	case "BRIGHTNESS":
@@ -346,6 +406,19 @@ func (device *controller) processLine(line string, now time.Time, writer respons
 			strconv.FormatUint(uint64(color.green), 10) + "," +
 			strconv.FormatUint(uint64(color.blue), 10))
 
+	case "DISPLAY_DEMO":
+		if len(fields) != 1 {
+			writer("ERROR BAD_ARGUMENTS")
+			return
+		}
+		device.touch(now)
+		_, _, device.supplyMV = device.readSupply()
+		device.batteryLevel = classifyBattery(device.supplyMV)
+		device.displayDemo = true
+		device.phase = phaseStartupColors
+		device.phaseStarted = now
+		writer("OK")
+
 	default:
 		writer("ERROR UNKNOWN_COMMAND")
 	}
@@ -353,7 +426,7 @@ func (device *controller) processLine(line string, now time.Time, writer respons
 
 func (device *controller) connect(now time.Time) {
 	device.touch(now)
-	if device.phase == phaseConnecting {
+	if device.phase == phaseConnecting && !device.displayDemo {
 		device.phase = phaseConnectionConfirmed
 		device.phaseStarted = now
 	}
@@ -374,32 +447,47 @@ func (device *controller) expireHost(now time.Time) {
 }
 
 func (device *controller) updateDisplay(now time.Time) {
-	startupStep := startupColorOn + startupColorOff
-	startupDuration := 3 * startupStep
-	batteryStep := batteryBlinkOn + batteryBlinkOff
-	batteryDuration := 3 * batteryStep
 	confirmationStep := connectFlashOn + connectFlashOff
 	confirmationDuration := 3 * confirmationStep
 
 	switch device.phase {
 	case phaseStartupColors:
 		if now.Sub(device.phaseStarted) >= startupDuration {
-			device.phase = phaseBatteryLevel
+			device.phase = phaseStartupPause
 			device.phaseStarted = device.phaseStarted.Add(startupDuration)
 		}
+	case phaseStartupPause:
+		if now.Sub(device.phaseStarted) >= startupPause {
+			device.phase = phaseBatteryLevel
+			device.phaseStarted = device.phaseStarted.Add(startupPause)
+		}
 	case phaseBatteryLevel:
-		if now.Sub(device.phaseStarted) >= batteryDuration {
-			if device.linked {
+		if now.Sub(device.phaseStarted) >= batteryDisplay {
+			device.phase = phaseBatteryPause
+			device.phaseStarted = device.phaseStarted.Add(batteryDisplay)
+		}
+	case phaseBatteryPause:
+		if now.Sub(device.phaseStarted) >= batteryPause {
+			if device.displayDemo {
+				device.phase = phaseConnecting
+			} else if device.linked {
 				device.phase = phaseConnectionConfirmed
 			} else {
 				device.phase = phaseConnecting
 			}
 			device.phaseStarted = now
 		}
+	case phaseConnecting:
+		if device.displayDemo && now.Sub(device.phaseStarted) >= demoConnecting {
+			device.phase = phaseConnectionConfirmed
+			device.phaseStarted = now
+		}
 	case phaseConnectionConfirmed:
 		if now.Sub(device.phaseStarted) >= confirmationDuration {
 			device.phase = phaseStatus
 			device.phaseStarted = now
+			device.stateStarted = now
+			device.displayDemo = false
 		}
 	}
 
@@ -410,22 +498,13 @@ func (device *controller) displayColor(now time.Time) rgbColor {
 	elapsed := now.Sub(device.phaseStarted)
 	switch device.phase {
 	case phaseStartupColors:
-		step := startupColorOn + startupColorOff
-		if elapsed%step >= startupColorOn {
-			return colorOff
+		if elapsed < startupGradientSegment {
+			return mixColor(colorRed, colorYellow, elapsed, startupGradientSegment)
 		}
-		switch elapsed / step {
-		case 0:
-			return colorRed
-		case 1:
-			return colorYellow
-		default:
-			return colorGreen
-		}
+		return mixColor(colorYellow, colorGreen, elapsed-startupGradientSegment, startupGradientSegment)
+	case phaseStartupPause, phaseBatteryPause:
+		return colorOff
 	case phaseBatteryLevel:
-		if elapsed%(batteryBlinkOn+batteryBlinkOff) >= batteryBlinkOn {
-			return colorOff
-		}
 		return device.batteryLevel.color()
 	case phaseConnecting:
 		return scaleColor(colorBlue, pulseLevel(elapsed))
@@ -435,7 +514,7 @@ func (device *controller) displayColor(now time.Time) rgbColor {
 		}
 		return colorOff
 	case phaseStatus:
-		return renderStatus(device.state, elapsed)
+		return renderStatus(device.state, now.Sub(device.stateStarted))
 	default:
 		return colorOff
 	}
@@ -503,8 +582,12 @@ func (phase displayPhase) String() string {
 	switch phase {
 	case phaseStartupColors:
 		return "STARTUP_COLORS"
+	case phaseStartupPause:
+		return "STARTUP_PAUSE"
 	case phaseBatteryLevel:
 		return "BATTERY"
+	case phaseBatteryPause:
+		return "BATTERY_PAUSE"
 	case phaseConnecting:
 		return "CONNECTING"
 	case phaseConnectionConfirmed:
@@ -541,12 +624,11 @@ func writeSerialLine(value string) {
 func main() {
 	renderer, err := newLEDRenderer()
 	if err != nil {
+		// The internal LED must remain disabled even if PWM initialization fails.
 		machine.LED.Configure(machine.PinConfig{Mode: machine.PinOutput})
+		machine.LED.Set(false)
 		for {
-			machine.LED.Set(true)
-			time.Sleep(100 * time.Millisecond)
-			machine.LED.Set(false)
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(time.Second)
 		}
 	}
 
@@ -569,6 +651,7 @@ func main() {
 		phase:    phaseStartupColors,
 	}
 	device.phaseStarted = time.Now()
+	device.stateStarted = device.phaseStarted
 	_, _, device.supplyMV = device.readSupply()
 	device.batteryLevel = classifyBattery(device.supplyMV)
 	_ = device.enableBluetooth()
