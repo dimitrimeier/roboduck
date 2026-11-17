@@ -61,21 +61,34 @@ Firmware-Watchdog sind praktisch bestätigt.
   `PING`/`PONG` sowie OpenCode-End-to-End-Synchronisation bestätigt.
 - [x] USB als aktiven Primary und BLE als verbundenen Standby betrieben;
   Failover zu BLE und Failback zu USB real kontrolliert bestätigt.
+- [x] Akku-ADC des realen Clone-Boards über `P0.04` ausgelesen und als
+  Diagnosebefehl `BATTERY` in Firmware 0.3.1 ergänzt.
+- [x] Interne `VDDH/5`-Messung als `SUPPLY` in Firmware 0.3.2 ergänzt und über
+  USB sowie im reinen Akkubetrieb über BLE bestätigt.
+- [x] `VDDH/5` gegen 4,230 V Multimeterwert kalibriert und Korrekturfaktor in
+  Firmware 0.3.3 hinterlegt.
+- [x] Start-, Akku- und Verbindungssequenz für zwei zunächst gespiegelte
+  RGB-Augen in Firmware 0.4.0 simuliert und per `DISPLAY` diagnostizierbar gemacht.
 
 ## Als Nächstes
 
-1. Mit Akku einen echten USB-Kabelausfall bei verbundenem BLE-Standby testen.
-2. Im normalen Ablauf noch `IDLE` und `OFF` vollständig beobachten.
-3. Wechselnde COM-Port-Nummer und einen real blockierten Port testen.
-4. PoC 2 mit zusätzlichen Grenz- und Reihenfolgetests abschließen.
-5. Mindestens zweistündigen Primary/Backup-Langzeittest durchführen.
-6. Bei erfolgreichem Langzeittest die drei externen LEDs samt Vorwiderständen
-   festlegen und verdrahten.
+1. Akku-Prozentstufen und Hysterese auf Basis der kalibrierten `VDDH/5`-Messung
+   festlegen und über die Entladekurve praktisch prüfen.
+2. Mit Akku einen echten USB-Kabelausfall bei verbundenem BLE-Standby testen.
+3. Im normalen Ablauf noch `IDLE` und `OFF` vollständig beobachten.
+4. Wechselnde COM-Port-Nummer und einen real blockierten Port testen.
+5. PoC 2 mit zusätzlichen Grenz- und Reihenfolgetests abschließen.
+6. Mindestens zweistündigen Primary/Backup-Langzeittest durchführen.
+7. Durchlassspannung und gewünschten Strom der zwei Common-Cathode-RGB-LEDs
+   bestimmen, danach sechs Vorwiderstände, PWM-Pins und gegebenenfalls
+   Treiberstufen festlegen.
 
 ## Offene Fragen
 
-- Welche Farben, Durchlassspannungen und Nennströme haben die drei externen LEDs?
-- Welche GPIO-Pins und Vorwiderstände werden für die externen LEDs verwendet?
+- Welche Durchlassspannungen und Nennströme haben die sechs Farbkanäle der zwei
+  Common-Cathode-RGB-LEDs?
+- Welche sechs GPIO-Pins, Vorwiderstände und gegebenenfalls Source-Treiber werden
+  für die später unabhängig steuerbaren Augen verwendet?
 - Eine Gesamtanzeige oder eine LED pro Session im MVP?
 - Wie lange soll `FINISHED` sichtbar bleiben?
 - Sollen Berechtigungsanfragen eine eigene Farbe statt `ASKING` erhalten?
@@ -210,3 +223,96 @@ passende Dokument, nicht in diese Datei.
   Diagnosemodi ab.
 - **Nächster Schritt:** Mit Akku einen echten physischen USB-Kabelausfall testen
   und danach den Langzeittest mit Primary/Backup durchführen.
+
+### 2026-11-16 – Akku-ADC diagnostisch ausgelesen
+
+- **Werkzeuge:** Go 1.27.4 und TinyGo 0.44.0 unter Windows eingerichtet.
+- **Firmware:** Version 0.3.1 ergänzt den Protokollbefehl `BATTERY` für den
+  nice!nano-Akku-Messkanal `P0.04` (`AIN2`). Ausgegeben werden ADC-Rohwert,
+  Spannung am ADC und die mit dem originalen 7/5-Spannungsteiler hochgerechnete
+  Quellspannung.
+- **Realer Test:** Firmware gebaut, per UF2 geflasht und auf COM6 verifiziert.
+  Ohne angeschlossenen Akku lagen wiederholte Messungen stabil bei etwa
+  395–400 mV am ADC beziehungsweise nominell 553–560 mV am Akkuanschluss.
+- **Bewertung:** Der Kanal ist auf dem Clone per Firmware auslesbar. Der
+  USB-Betrieb erzeugt dort keine messbaren 5 V; der Leerlaufwert ohne Akku ist
+  kein Ladezustand und wird vermutlich von der Ladeschaltung beeinflusst.
+- **Nächster Schritt:** Mit angeschlossenem 1S-LiPo gleichzeitig `BATTERY` und
+  die reale Akkuspannung per Multimeter messen, um Teilerfaktor und Grenzwerte
+  des Clones zu kalibrieren.
+
+### 2026-11-16 – Akku-ADC über BLE mit realem Akku geprüft
+
+- **Testaufbau:** USB getrennt, Board ausschließlich aus dem angeschlossenen
+  Akku versorgt und über den projektspezifischen BLE-GATT-Dienst verbunden.
+- **Verbindung:** BLE-Handshake bestätigte Firmware 0.3.1; drei
+  `BATTERY`-Abfragen wurden transportneutral beantwortet.
+- **Messwerte:** `source_mv` lag nur zwischen 507 und 585 mV, obwohl das Board
+  nachweislich im Akkubetrieb lief. Erwartet wären bei einem originalen
+  nice!nano-Spannungsteiler ungefähr 3.0 bis 4.2 V.
+- **Bewertung:** Der geprüfte Clone führt die Akkuspannung nicht wie erwartet
+  über einen 7/5-Spannungsteiler an `P0.04`. Dieser ADC-Kanal ist daher auf dem
+  vorhandenen Board nicht für eine Ladezustandsschätzung verwendbar.
+- **Nächster Schritt:** Nach kurzem USB-Reconnect eine Diagnose-Firmware für den
+  internen nRF52840-Kanal `VDDH/5` flashen. Falls auch dieser nur die geregelte
+  Versorgung und nicht die Akkuspannung sieht, ist eine externe Messverdrahtung
+  erforderlich.
+
+### 2026-11-16 – Interne Versorgungsspannung erfolgreich gemessen
+
+- **Firmware:** Version 0.3.2 ergänzt `SUPPLY`. Der Befehl liest den internen
+  nRF52840-SAADC-Eingang `VDDH/5` und rechnet ihn auf die Versorgungsspannung
+  hoch; eine externe GPIO-Verbindung ist dafür nicht erforderlich.
+- **USB-Test:** Zwei Messungen ergaben 4,910 und 4,915 V. Damit erkennt der
+  interne Kanal die USB-Versorgung plausibel.
+- **Akku-/BLE-Test:** Nach Abziehen von USB blieb das Board per BLE erreichbar.
+  Drei aufeinanderfolgende Messungen ergaben stabil 4,295 V, während `P0.04`
+  weiterhin nur nominell 0,486 V meldete.
+- **Bewertung:** `VDDH/5` folgt auf diesem Clone der jeweiligen Eingangsquelle
+  und ermöglicht im kabellosen Betrieb eine Akkuspannungsschätzung ohne
+  Zusatzverdrahtung. `P0.04` bleibt für diesen Zweck ungeeignet.
+- **Nächster Schritt:** Akkuspannung parallel mit einem Multimeter messen, den
+  ADC-Wert kalibrieren und danach robuste Prozentstufen mit Hysterese definieren.
+
+### 2026-11-16 – Versorgungsspannung kalibriert
+
+- **Referenz:** Bei einer Firmwareanzeige von 4,295 V wurden direkt am Akku mit
+  dem Multimeter 4,230 V gemessen.
+- **Abweichung:** Der unkalibrierte ADC-Wert lag 65 mV beziehungsweise etwa
+  1,54 % zu hoch.
+- **Firmware:** Version 0.3.3 multipliziert `SUPPLY` board-spezifisch mit
+  `4230/4295` (ungefähr 0,98487). ADC-Rohwert und Spannung am internen
+  `VDDH/5`-Eingang bleiben zur Diagnose in der Antwort enthalten.
+- **Nächster Schritt:** Firmware 0.3.3 per USB flashen, den korrigierten Wert
+  praktisch bestätigen und anschließend Prozentstufen mit Hysterese festlegen.
+
+### 2026-11-16 – Kalibrierung über BLE bestätigt
+
+- **Flash/Test:** Firmware 0.3.3 per USB geflasht, anschließend USB getrennt und
+  `SUPPLY` dreimal über BLE im reinen Akkubetrieb abgefragt.
+- **Messwerte:** 4,220 V, 4,230 V und 4,230 V bei einer Multimeterreferenz von
+  4,230 V.
+- **Bewertung:** Die board-spezifische Einpunktkalibrierung trifft die Referenz
+  bis auf maximal 10 mV und ist für grobe Ladezustandsstufen ausreichend.
+- **Nächster Schritt:** Prozentstufen und Hysterese festlegen und danach die
+  Entladekurve praktisch über mehrere Spannungsbereiche beobachten.
+
+### 2026-11-16 – RGB-Start- und Verbindungsablauf simuliert
+
+- **Firmware:** Version 0.4.0 bildet nicht blockierend RGB-Funktionstest,
+  Akku-Drittel, blaues Verbindungspulsieren, drei kurze Verbindungsblinker und
+  anschließend die vorhandenen Statusmuster ab.
+- **Akkuanzeige:** Vorläufige Grenzen sind 3,60 V und 3,90 V. Über 4,40 V wird
+  USB erkannt und Gelb als „Akkustand unbekannt“ verwendet, weil `VDDH/5` dann
+  nicht die Akkuspannung sieht.
+- **Diagnose:** `DISPLAY` liefert Phase, Akkustufe, Startmesswert und simuliertes
+  RGB. Die einfarbige Board-LED zeigt davon nur die Helligkeit.
+- **Verbindung:** Ein gültiger `HELLO 1`-Handshake über USB oder BLE bestätigt
+  die Verbindung. Nach 15 Sekunden ohne Hostaktivität kehrt die Anzeige in die
+  blaue Suchphase zurück, statt einen veralteten Status zu zeigen.
+- **Hardwareplanung:** Zwei Common-Cathode-RGB-LEDs werden vorerst gespiegelt,
+  aber für spätere unabhängige Steuerung mit sechs getrennten PWM-Kanälen und
+  sechs getrennten Vorwiderständen vorgesehen.
+- **Validierung:** TinyGo-Build für `nicenano` erfolgreich. Der reale visuelle
+  RGB-Test bleibt bis zur sicheren Festlegung von Strom, Widerständen und Pins
+  offen.

@@ -36,16 +36,14 @@
 
 ### LED-Anzeige
 
-Vorläufiges Farbschema:
-
-| Zustand | Anzeige |
-|---|---|
-| `RUNNING` | Blau, pulsierend |
-| `ASKING` | Gelb, blinkend |
-| `FINISHED` | Grün, zeitlich begrenzt |
-| `ERROR` | Rot, blinkend |
-| `IDLE` | Weiß, schwach |
-| `OFF` | Aus |
+- Zwei RGB-Augen sind vorgesehen und zeigen vorerst dasselbe an.
+- Die Verdrahtung soll eine spätere unabhängige Steuerung beider Augen erlauben.
+- Beim Start: Rot, Gelb und Grün als Funktionstest, danach drei langsame Blinker
+  in Rot/Gelb/Grün für das gemessene Akkudrittel.
+- Bei USB-Versorgung ist der Akkustand auf dem vorhandenen Board nicht messbar;
+  Gelb kennzeichnet dann „unbekannt“.
+- Bis zum Host-Handshake: Blau pulsierend; danach drei kurze blaue Blinker.
+- Die endgültigen RGB-Farben der OpenCode-Zustände sind noch festzulegen.
 
 Bei einer Gesamtanzeige gilt vorläufig diese Priorität:
 
@@ -63,6 +61,8 @@ ERROR > ASKING > RUNNING > FINISHED > IDLE > OFF
 - Tray-Symbol mit Verbindungs- und OpenCode-Status.
 - Lokale Konfigurationsdatei mit validiertem Schema.
 - Diagnosemodus für Serial- und OpenCode-Events.
+- Verfeinerung der groben Akku-Drittel auf Basis einer gemessenen Entladekurve,
+  mit Hysterese gegen springende Werte.
 
 ## Optionale spätere Funktionen
 

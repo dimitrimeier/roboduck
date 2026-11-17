@@ -124,7 +124,7 @@ wenig Speicher. BLE teilt längere Zeilen transparent in GATT-Pakete auf.
 
 ```text
 HOST -> HELLO 1
-MCU  -> DEVICE OPENCODE_STATUS protocol=1 firmware=0.3.0 leds=1
+MCU  -> DEVICE OPENCODE_STATUS protocol=1 firmware=0.3.3 leds=1
 HOST -> RESET_STATE
 MCU  -> OK
 HOST -> SET 0 RUNNING
@@ -142,6 +142,9 @@ SET <led-index> <state>
 BRIGHTNESS <0-255>
 SYNC_COMPLETE
 PING
+BATTERY
+SUPPLY
+DISPLAY
 ```
 
 Unterstützte Antworten:
@@ -150,8 +153,26 @@ Unterstützte Antworten:
 DEVICE OPENCODE_STATUS protocol=<n> firmware=<version> leds=<count>
 OK
 PONG
+BATTERY raw=<n> adc_mv=<n> source_mv=<n>
+SUPPLY raw=<n> adc_mv=<n> supply_mv=<n>
+DISPLAY phase=<phase> battery=<level> supply_mv=<n> rgb=<r>,<g>,<b>
 ERROR <code>
 ```
+
+`BATTERY` ist ein Diagnosebefehl für den beim originalen nice!nano an `P0.04`
+erwarteten Spannungsteiler. Dieser Pfad bildet auf dem geprüften Clone nicht die
+Akkuspannung ab. Maßgeblich ist daher `SUPPLY`: Der nRF52840 misst `VDDH` über
+seinen internen Teiler `VDDH/5`, ohne einen externen GPIO oder zusätzliche
+Verdrahtung. `supply_mv` wird mit dem am realen Board gegen ein Multimeter
+bestimmten Faktor `4230/4295` kalibriert.
+
+Der LED-Renderer besitzt vor dem eigentlichen Hoststatus eigene, nicht
+blockierende Phasen: RGB-Funktionstest, Akku-Drittel, blaues
+Verbindungspulsieren und drei kurze Verbindungsblinker. `DISPLAY` erlaubt die
+Diagnose der simulierten RGB-Ausgabe. Beide geplanten RGB-Augen werden zunächst
+gespiegelt; sechs getrennte PWM-Kanäle halten eine spätere unabhängige
+Ansteuerung ohne Neuverdrahtung offen. Die endgültigen Statusfarben bleiben ein
+TODO.
 
 Ein Protokollparser darf unbekannte Befehle nicht als gültig bestätigen. Die
 maximale Zeilenlänge und Timeouts werden bei der Firmware-Implementierung
@@ -171,7 +192,8 @@ Bootphase.
 - USB-Ausfall bei verfügbarem BLE: BLE aktivieren und vollständig synchronisieren.
 - USB-Reconnect: USB synchronisieren und wieder als Primary auswählen.
 - Ausbleibendes `PONG`: Verbindung als verloren behandeln.
-- Fehlende Hostaktivität: Firmware setzt die Anzeige nach 15 Sekunden auf `OFF`.
+- Fehlende Hostaktivität: Firmware verwirft nach 15 Sekunden den alten Status
+  und kehrt zum blauen Verbindungspulsieren zurück.
 - OpenCode-Stream beendet: mit Backoff neu verbinden und Zustand neu einlesen.
 - Host-Neustart: OpenCode- und Gerätezustand vollständig neu aufbauen.
 - Firmware-Neustart: Handshake und vollständige Synchronisation wiederholen.
