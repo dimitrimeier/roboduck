@@ -73,6 +73,7 @@ export class OpenCodeStatusSource implements StatusSource {
       return {
         snapshot,
         events: queue,
+        refreshSnapshot: () => this.#loadSnapshot(client, signal),
         async close() {
           await eventIterator.return?.();
           queue.end();

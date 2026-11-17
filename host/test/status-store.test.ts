@@ -185,6 +185,19 @@ describe("StatusStore", () => {
     assert.equal(sessionStatus(store), "idle");
     assert.equal(store.view().sessions[0]?.pendingAttention.length, 0);
   });
+
+  it("removes a session when polling reports it as inactive", () => {
+    const store = new StatusStore();
+    store.apply(event("session.execution.started", 1));
+
+    store.apply({
+      type: "host.session.inactive",
+      sessionId: "session-1",
+      occurredAt: 2,
+    });
+
+    assert.equal(store.view().overallStatus, "off");
+  });
 });
 
 function snapshot(sessions: SourceSnapshot["sessions"]): SourceSnapshot {
@@ -203,7 +216,8 @@ function event(
     | "session.execution.interrupted"
     | "session.idle"
     | "session.deleted"
-    | "session.archived",
+    | "session.archived"
+    | "host.session.inactive",
   occurredAt: number,
 ): StatusEvent {
   return { type, ...eventBase(occurredAt) };

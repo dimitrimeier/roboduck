@@ -29,10 +29,12 @@ werden. Es existiert noch keine Firmware.
 - [x] Zustandsmodell mit Gesamtpriorität und zeitlich begrenztem `FINISHED`
   implementiert.
 - [x] Reconnect mit exponentiellem Backoff implementiert.
+- [x] Periodische Snapshot-Abstimmung für Änderungen ohne Live-Event
+  implementiert.
 - [x] Konsolenausgabe als JSON Lines implementiert.
 - [x] OpenCode-Adapter erfolgreich mit dem lokalen Service verbunden und einen
   Snapshot mit einer aktiven Session geladen.
-- [x] 16 automatisierte Tests sowie Typecheck und Build erfolgreich ausgeführt.
+- [x] 23 automatisierte Tests sowie Typecheck und Build erfolgreich ausgeführt.
 
 ## Als Nächstes
 
@@ -69,3 +71,19 @@ passende Dokument, nicht in diese Datei.
 - **Automatisierung:** 16 Tests bestanden; Typecheck und Build erfolgreich.
 - **Nächster Schritt:** Start, Abschluss, Frage, Berechtigung, Unterbrechung,
   Fehler und parallele Sessions live beobachten.
+
+### 2026-11-12 – Fehlendes Inaktiv-Event kompensiert
+
+- **Beobachtung:** Im realen Test wurden `session.execution.started`,
+  `session.execution.succeeded` und der zeitgesteuerte Wechsel von `FINISHED` zu
+  `IDLE` korrekt erkannt. Beim Schließen bzw. Inaktivwerden der Session kam kein
+  weiteres OpenCode-Live-Event; erst ein Neustart ergab `OFF`.
+- **Änderung:** Die bestehende Verbindung lädt nun standardmäßig alle fünf
+  Sekunden einen neuen aktiven Snapshot. Bei einer Differenz wird ein
+  synthetisches Host-Event erzeugt.
+- **Schutzregel:** `FINISHED` bleibt bis zum Ende seiner Haltezeit sichtbar und
+  wird nicht durch einen frühen Poll entfernt.
+- **Automatisierung:** 23 Tests decken jetzt zusätzlich Snapshot-Differenzen,
+  Inaktiv-Erkennung und die `FINISHED`-Haltezeit ab.
+- **Nächster Schritt:** Praktisch prüfen, ob nach dem Timer-Übergang innerhalb
+  von fünf Sekunden `host.session.inactive` und anschließend `OFF` erscheinen.

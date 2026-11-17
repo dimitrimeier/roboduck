@@ -78,3 +78,16 @@ Ausführung wird als `IDLE` und nicht als `ERROR` dargestellt.
 
 **Begründung:** Eine Unterbrechung ist nicht zwingend ein technischer Fehler.
 Diese Darstellung wird im praktischen PoC geprüft.
+
+## 2026-11-12 – Live-Events durch periodische Abstimmung ergänzen
+
+**Status:** Angenommen
+
+Zusätzlich zum OpenCode-Event-Stream wird der aktive Snapshot standardmäßig alle
+fünf Sekunden neu geladen. Nur tatsächliche Differenzen erzeugen interne
+Host-Events. Das Intervall ist konfigurierbar.
+
+**Begründung:** Der praktische Test zeigte, dass beim Inaktivwerden bzw.
+Schließen einer Session kein passendes Live-Event eintreffen muss. Ohne
+Abstimmung bleibt der lokale Zustand bis zum Neustart fälschlich auf `IDLE`.
+Polling bleibt ein Fallback; unveränderte Ergebnisse erzeugen kein Log-Rauschen.

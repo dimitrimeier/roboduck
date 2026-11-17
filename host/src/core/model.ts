@@ -67,6 +67,14 @@ export type StatusEvent =
     })
   | (StatusEventBase & {
       readonly type: "session.deleted" | "session.archived";
+    })
+  | (StatusEventBase & {
+      readonly type: "host.session.inactive";
+    })
+  | (StatusEventBase & {
+      readonly type: "host.session.reconciled";
+      readonly running: boolean;
+      readonly pendingAttention: readonly PendingAttention[];
     });
 
 export interface SessionView {

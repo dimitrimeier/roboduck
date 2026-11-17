@@ -79,8 +79,15 @@ describe("StatusMonitor", () => {
     let attempts = 0;
     const scheduler: Scheduler = {
       every: () => () => undefined,
-      async wait() {
-        order.push("wait");
+      wait(delayMs, signal) {
+        if (delayMs === 1_000) {
+          order.push("wait");
+          return Promise.resolve();
+        }
+
+        return new Promise((resolve) => {
+          signal.addEventListener("abort", () => resolve(), { once: true });
+        });
       },
     };
     const source: StatusSource = {
@@ -90,6 +97,9 @@ describe("StatusMonitor", () => {
           return {
             snapshot: { capturedAt: 100, sessions: [] },
             events: toAsyncIterable([]),
+            async refreshSnapshot() {
+              return { capturedAt: 100, sessions: [] };
+            },
             async close() {
               order.push("close");
             },
@@ -108,6 +118,50 @@ describe("StatusMonitor", () => {
 
     assert.deepEqual(order, ["close", "wait"]);
   });
+
+  it("emits an inactive host event when polling detects a closed session", async () => {
+    const abortController = new AbortController();
+    const received: StatusEvent[] = [];
+    const source: StatusSource = {
+      async connect() {
+        return {
+          snapshot: {
+            capturedAt: 100,
+            sessions: [{ sessionId: "session-1", running: true, pendingAttention: [] }],
+          },
+          events: neverEndingEvents(),
+          async refreshSnapshot() {
+            return { capturedAt: 200, sessions: [] };
+          },
+          close: async () => undefined,
+        };
+      },
+    };
+    const reporter: StatusReporter = {
+      connected: () => undefined,
+      eventReceived(event, view) {
+        received.push(event);
+        assert.equal(view.overallStatus, "off");
+        abortController.abort();
+      },
+      timerChanged: () => undefined,
+      disconnected: () => undefined,
+    };
+    const monitor = new StatusMonitor(source, new StatusStore(), reporter, {
+      scheduler: TEST_SCHEDULER,
+      pollIntervalMs: 5_000,
+    });
+
+    await monitor.run(abortController.signal);
+
+    assert.deepEqual(received, [
+      {
+        type: "host.session.inactive",
+        sessionId: "session-1",
+        occurredAt: 200,
+      },
+    ]);
+  });
 });
 
 function connection(events: readonly StatusEvent[]): StatusConnection {
@@ -117,12 +171,28 @@ function connection(events: readonly StatusEvent[]): StatusConnection {
       sessions: [{ sessionId: "session-1", running: true, pendingAttention: [] }],
     },
     events: toAsyncIterable(events),
+    async refreshSnapshot() {
+      return {
+        capturedAt: 100,
+        sessions: [{ sessionId: "session-1", running: true, pendingAttention: [] }],
+      };
+    },
     close: async () => undefined,
   };
 }
 
 async function* toAsyncIterable(events: readonly StatusEvent[]): AsyncIterable<StatusEvent> {
   yield* events;
+}
+
+function neverEndingEvents(): AsyncIterable<StatusEvent> {
+  return {
+    [Symbol.asyncIterator]() {
+      return {
+        next: () => new Promise<IteratorResult<StatusEvent>>(() => undefined),
+      };
+    },
+  };
 }
 
 function reporterRecording(
