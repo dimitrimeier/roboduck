@@ -1,3 +1,4 @@
+import { aggregateStatus } from "./aggregate-status.js";
 import type {
   DisplayStatus,
   PendingAttention,
@@ -31,15 +32,6 @@ const SYSTEM_CLOCK: Clock = {
 };
 
 export const MAX_FINISHED_HOLD_MS = 5_000;
-
-const STATUS_PRIORITY: Readonly<Record<DisplayStatus, number>> = {
-  off: 0,
-  idle: 1,
-  finished: 2,
-  running: 3,
-  asking: 4,
-  error: 5,
-};
 
 export class StatusStore {
   readonly #sessions = new Map<string, MutableSessionState>();
@@ -197,14 +189,7 @@ export class StatusStore {
         lastEventType: state.lastEventType,
       }));
 
-    let overallStatus: DisplayStatus = "off";
-    for (const session of sessions) {
-      if (STATUS_PRIORITY[session.status] > STATUS_PRIORITY[overallStatus]) {
-        overallStatus = session.status;
-      }
-    }
-
-    return { overallStatus, sessions };
+    return { overallStatus: aggregateStatus(sessions.map((session) => session.status)), sessions };
   }
 
   #getOrCreate(sessionId: string, occurredAt: number): MutableSessionState {

@@ -53,6 +53,28 @@ The OpenCode event stream is live-only, so every reconnect requires a complete
 snapshot. Some relevant endpoints are experimental and may require adaptation
 after OpenCode updates.
 
+### Native WSL collector
+
+An optional WSL collector observes the separate native Linux service with the
+same OpenCode adapter and state model. A lingering `systemd --user` service
+starts the collector when its distribution boots. It only discovers an existing
+OpenCode service; it does not start OpenCode just because WSL started.
+
+The collector atomically replaces a versioned JSON file on the Windows
+filesystem once per second. It contains only connection state, a heartbeat
+timestamp, session IDs, derived statuses, and `FINISHED` deadlines. No OpenCode
+credentials or content cross the boundary. The runtime has no serial or BLE
+dependencies and never owns hardware.
+
+The Windows bridge reads its per-user relay directory without invoking WSL or
+opening network listeners. Each file is a distinct source; local and relayed
+session IDs are namespaced before aggregation. Source snapshots, reconnects,
+and expiry affect only that source. Files are size/schema checked, and missing,
+invalid, disconnected, or ten-second-old sources are removed. A `FINISHED`
+deadline expires even if the collector stops writing. Only the Windows bridge
+sends the merged state to USB/BLE. Private standalone OpenCode servers are not
+observed by the collector.
+
 ### State management
 
 The host keeps one state per session and derives either aggregate state or

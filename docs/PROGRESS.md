@@ -22,6 +22,12 @@ Firmware 0.6.5 drives the first external RGB eye using hardware PWM. The startup
 self-test, supply indication, connection sequence, mixed-color running fade,
 asking flashes, finished pulse, and idle double flash have been visually tested.
 
+An optional native WSL collector now starts as a lingering systemd user service
+and relays reduced session state to the manually started Windows bridge through
+local files. Hardware remains owned exclusively by Windows. The user confirmed
+that the native WSL setup works with the display. A full distribution restart
+and explicit simultaneous-source priority/recovery tests remain pending.
+
 ## Completed
 
 - [x] Evaluated feasibility using the OpenCode API and live event stream.
@@ -48,6 +54,10 @@ asking flashes, finished pulse, and idle double flash have been visually tested.
 - [x] Expanded ignore rules and added public contribution/security guidance.
 - [x] Added GitHub Actions checks for the host and BLE helper.
 - [x] Scanned tracked content for common credentials and local absolute paths.
+- [x] Added independent Windows/WSL aggregation, bounded local relays, and WSL
+  collector installation with systemd boot autostart.
+- [x] Documented the additional WSL installation separately, including
+  prerequisites, service autostart, verification, maintenance, and troubleshooting.
 
 ## Next steps
 
@@ -62,6 +72,8 @@ asking flashes, finished pulse, and idle double flash have been visually tested.
    source drivers for 10 mA per channel.
 8. Build and test USB, BLE-only, failover, and failback on physical macOS
    hardware.
+9. Validate WSL collector startup after a normal distribution restart and
+   explicit simultaneous native Windows/WSL priority and recovery scenarios.
 
 ## Open questions
 
@@ -76,6 +88,58 @@ asking flashes, finished pulse, and idle double flash have been visually tested.
 
 Keep new entries brief. Detailed technical behavior belongs in the relevant
 document.
+
+### 2026-11-17 — Documented the additional WSL installation
+
+- The user confirmed the native WSL-to-display setup works after installation.
+  This does not yet establish full restart or concurrent-source recovery coverage.
+- Added `docs/WSL_SETUP.md` with clearly separated Windows/WSL commands,
+  prerequisites, V2 migration and scoped npm script permissions, collector
+  installation, autostart verification, VS Code terminal checks, and maintenance.
+- Made the extra per-distribution installation visible in the root quick start
+  and linked the dedicated guide from both READMEs. No runtime or service
+  configuration was changed for this documentation update.
+
+### 2026-11-17 — Added native WSL collection and user-service autostart
+
+- Confirmed that PowerShell working in a `\\wsl.localhost\...` directory still
+  runs Windows OpenCode; a native WSL installation needs a separate input.
+- Added a collector using the existing adapter/store, a privacy-minimized atomic
+  file relay, size/schema/age validation, source namespacing, independent source
+  cleanup, and non-extendable `FINISHED` deadlines.
+- Added a repeatable, guarded installer that deploys only the JavaScript client
+  runtime and a systemd user unit. Enabled the Ubuntu collector with lingering;
+  confirmed it is enabled/running and waits without starting OpenCode itself.
+- Started the native V2 service for a connection smoke test. Confirmed a fresh
+  connected relay and a read-only combined Windows/WSL snapshot without hardware
+  access; reinstallation and collector stop/start also succeeded.
+- Passed 60 host tests, type checking, and build. Windows autostart and firmware
+  were not changed. Full WSL restart and physical combined-source tests remain
+  pending; the already-running Windows bridge must be restarted to load changes.
+
+### 2026-11-17 — Installed Go and validated Bluetooth on this Windows host
+
+- Installed Go 1.27.4 with WinGet and successfully built the native BLE helper.
+- Ran `go test ./...` successfully; the helper currently has no Go test files.
+- A short default-mode run connected to OpenCode 2.3.0 and discovered the
+  `OCStatus` board over BLE with firmware 0.6.5. Protocol verification and full
+  synchronization succeeded, with BLE active and the host status `running`.
+- Stopped the smoke test cleanly. No persistent bridge process or startup task
+  was configured, and the generated helper remains ignored by Git.
+
+### 2026-11-17 — Diagnosed startup on a fresh Windows checkout
+
+- Installed the locked host dependencies and passed all 44 tests, type checking,
+  and the TypeScript build with Node.js 24.
+- Confirmed discovery, authentication, and a live session snapshot against the
+  local OpenCode 2.3.0 service; USB-only startup also succeeded without Go.
+- Reproduced the Bluetooth build failure because Go was unavailable and the
+  default mode's repeated `ENOENT` errors because the helper had not been built.
+- Found no supported application or UF2 bootloader USB device present during
+  diagnosis; the unrelated Intel serial port was not opened. Physical LED and
+  Bluetooth validation on this machine remain blocked by setup/hardware.
+- Documented the Go prerequisite, Windows USB-only startup, and the distinction
+  between OpenCode and device connection messages. No runtime code was changed.
 
 ### 2026-11-17 — Prepared repository for public GitHub hosting
 

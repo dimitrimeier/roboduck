@@ -13,6 +13,7 @@
     "check": "tsc -p tsconfig.json",
     "dev": "tsx src/main.ts",
     "dev:bluetooth": "node tools/start-bluetooth.mjs",
+    "install:wsl": "node tools/install-wsl-collector.mjs",
     "start": "node dist/main.js",
     "test": "tsx --test test/**/*.test.ts"
   },

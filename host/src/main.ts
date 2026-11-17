@@ -13,7 +13,10 @@ import { ConsoleBluetoothObserver } from "./adapters/console/console-bluetooth-o
 import { ConsoleSerialObserver } from "./adapters/console/console-serial-observer.js";
 import { ConsoleReporter } from "./adapters/console/console-reporter.js";
 import { OpenCodeStatusSource } from "./adapters/opencode/open-code-source.js";
+import { relayDirectory } from "./adapters/relay/relay-directory.js";
+import { RelayDirectoryMonitor } from "./adapters/relay/relay-directory-monitor.js";
 import { NodeSerialTransport } from "./adapters/serial/node-serial-transport.js";
+import { MultiSourceStatusReporter } from "./application/multi-source-status-reporter.js";
 import { MAX_FINISHED_HOLD_MS, StatusStore } from "./core/status-store.js";
 import type { StatusReporter } from "./ports/status-reporter.js";
 
@@ -39,16 +42,23 @@ const transportMode = readTransportMode(process.env["OPENCODE_STATUS_TRANSPORT"]
 
 reportConfiguration(transportMode);
 const statusOutputs = createStatusOutputs(transportMode, brightness);
+const reporter = new CompositeStatusReporter(new ConsoleReporter(), ...statusOutputs);
+const relayPath = relayDirectory();
+const sources = relayPath === undefined ? undefined : new MultiSourceStatusReporter(reporter);
+const relayMonitor = relayPath === undefined || sources === undefined
+  ? undefined
+  : new RelayDirectoryMonitor(relayPath, (sourceId) => sources.forSource(sourceId));
 
 const monitor = new StatusMonitor(
   new OpenCodeStatusSource(),
   new StatusStore({ finishedHoldMs }),
-  new CompositeStatusReporter(new ConsoleReporter(), ...statusOutputs),
+  sources?.forSource("local") ?? reporter,
   { pollIntervalMs },
 );
 
 await Promise.all([
   monitor.run(abortController.signal),
+  ...(relayMonitor === undefined ? [] : [relayMonitor.run(abortController.signal)]),
   ...statusOutputs.map((output) => output.run(abortController.signal)),
 ]);
 

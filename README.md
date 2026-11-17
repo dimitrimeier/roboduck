@@ -23,6 +23,8 @@ ERROR > ASKING > RUNNING > FINISHED > IDLE > OFF
 
 - **Windows/macOS host bridge:** reads OpenCode events and owns the complete
   display state.
+- **Optional WSL collector:** observes native Linux OpenCode sessions and relays
+  reduced state to the Windows bridge, without accessing USB or Bluetooth.
 - **USB/BLE transport:** discovers devices, verifies them with a protocol
   handshake, reconnects, and performs full synchronization.
 - **Microcontroller firmware:** renders the state on an nRF52840-based board.
@@ -48,7 +50,9 @@ pulses. The internal red board LED is disabled.
 ## Quick start
 
 Requirements: Node.js 22 or newer, OpenCode V2 with its local background
-service, and the supported board flashed with this repository's firmware.
+service, Go 1.25 or newer to build the Bluetooth helper, and the supported board
+flashed with this repository's firmware. Go is not needed for USB-only operation;
+see [host/README.md](host/README.md#usb-only-start-on-windows).
 
 ```sh
 cd host
@@ -59,11 +63,29 @@ npm run dev
 
 See [host/README.md](host/README.md) for host setup and
 [firmware/README.md](firmware/README.md) for building, flashing, and wiring.
+For native Windows and WSL sessions on the same display, see
+[WSL installation and autostart](docs/WSL_SETUP.md).
+
+### Additional installation for WSL
+
+The normal Windows setup does **not** install the native WSL collector. After
+preparing Node.js 22+, OpenCode V2, and systemd inside WSL, run once per
+distribution in another **Windows PowerShell** terminal, inside `host/`:
+
+```powershell
+npm run build
+npm run install:wsl -- --distribution Ubuntu
+```
+
+Replace `Ubuntu` with your distribution name. The collector then starts with
+WSL; the Windows hardware bridge remains manually started. See the
+[step-by-step WSL guide](docs/WSL_SETUP.md) for preparation and verification.
 
 ## Documentation
 
 - [Features](docs/FEATURES.md)
 - [Architecture](docs/ARCHITECTURE.md)
+- [WSL installation and autostart](docs/WSL_SETUP.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Proof-of-concept plan](docs/POC.md)
 - [Progress](docs/PROGRESS.md)

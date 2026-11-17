@@ -3,6 +3,24 @@
 This file records accepted technical decisions. New entries should include a
 date, status, decision, and rationale.
 
+## 2026-11-17 — WSL collector with a local status-file relay
+
+**Status:** Accepted
+
+Keep hardware ownership in the Windows bridge and run a separate native Linux
+collector as a lingering `systemd --user` service in each configured WSL
+distribution. Relay only reduced state through atomically replaced, versioned
+files in a per-user Windows directory. Merge sources with namespaced session IDs,
+independent expiry, the existing priority order, and bounded `FINISHED` deadlines.
+Do not configure Windows autostart as part of WSL setup.
+
+**Rationale:** A service-owned collector can start independently of the manually
+started Windows bridge. A local file avoids TCP exposure, changing WSL addresses,
+cross-environment credentials, hardware forwarding, and launching stopped WSL
+distributions for discovery. The collector reuses the tested OpenCode/state code
+and discovers, but does not start, OpenCode. Node/OpenCode executable paths and
+systemd units are generated locally, never committed.
+
 ## 2026-11-17 — Shared Windows and macOS host
 
 **Status:** Accepted

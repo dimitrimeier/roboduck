@@ -1,8 +1,8 @@
 # Host bridge
 
-The host bridge observes the local OpenCode service, derives a privacy-minimized
-aggregate status, and sends it to the status light over USB serial or Bluetooth
-Low Energy.
+The host bridge observes the local OpenCode service and optional WSL collectors,
+derives a privacy-minimized aggregate status, and sends it to the status light
+over USB serial or Bluetooth Low Energy.
 
 ## Requirements
 
@@ -31,6 +31,56 @@ npm start
 
 Stop with `Ctrl+C`.
 
+### Windows and WSL together
+
+Native OpenCode sessions in WSL require an **additional, one-time collector
+installation per distribution**. The normal Windows installation above does not
+include this step. Keep exactly one hardware bridge on Windows; the collector
+inside WSL only relays reduced status and never accesses USB or Bluetooth.
+
+After preparing native Linux Node.js 22+, OpenCode V2, and a working systemd user
+manager in WSL, run **from Windows PowerShell**, inside `host/`:
+
+```powershell
+npm run build
+npm run install:wsl -- --distribution Ubuntu
+```
+
+Replace `Ubuntu` with the exact name from `wsl --list --verbose`. The installer
+enables collector autostart in WSL, but **not Windows bridge autostart**. Restart
+the manually running Windows bridge once to load WSL support.
+
+Follow the separate [WSL installation and autostart guide](../docs/WSL_SETUP.md)
+for prerequisites, V1-to-V2 migration, npm script permissions, service checks,
+VS Code terminal selection, updates, disabling, and troubleshooting.
+
+### USB-only start on Windows
+
+Go and the Bluetooth helper are not required when using only USB. After
+`npm install`, start from `host/` with:
+
+```powershell
+$env:OPENCODE_STATUS_TRANSPORT = "usb"
+npm run dev
+```
+
+To restore the default USB-primary/BLE-standby mode in that PowerShell session,
+remove the override with `Remove-Item Env:OPENCODE_STATUS_TRANSPORT`, build the
+Bluetooth helper, and start again.
+
+### Startup troubleshooting
+
+- **`Go was not found` during `build:bluetooth`:** install Go 1.25 or newer and
+  ensure `go version` works in the terminal used to build the helper.
+- **`opencode-status-ble.exe ENOENT`:** the Windows Bluetooth helper is missing.
+  Run `npm run build:bluetooth`, or select USB-only mode as shown above. The
+  default `both` mode attempts Bluetooth even when USB hardware is absent.
+- **`connected` but no `serial_connected`:** `connected` confirms the OpenCode
+  connection, not the board connection. Check that the flashed board is connected
+  using a USB data cable and appears with application VID/PID `239A:0029`.
+  Bootloader devices (`239A:00B3`) and unrelated serial ports are intentionally
+  ignored. Changing a COM port setting is neither required nor supported.
+
 ## Privacy-preserving output
 
 The application writes JSON Lines such as:
@@ -56,6 +106,7 @@ Environment variables:
 | `OPENCODE_STATUS_BRIGHTNESS` | `128` | Logical brightness from 0 to 255 |
 | `OPENCODE_STATUS_FINISHED_HOLD_MS` | `5000` | Hold time, capped at five seconds |
 | `OPENCODE_STATUS_POLL_INTERVAL_MS` | `5000` | OpenCode snapshot reconciliation interval |
+| `OPENCODE_STATUS_RELAY_DIR` | Windows local app data | Optional relay directory override; relay input is off by default on macOS/Linux |
 
 POSIX shell example:
 
