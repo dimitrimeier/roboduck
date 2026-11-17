@@ -161,11 +161,11 @@ oder wechselnder COM-Port-Nummer wieder verbinden?
 
 ### Abnahmekriterien
 
-- [ ] Das richtige Gerät wird ohne fest codierte COM-Nummer erkannt.
-- [ ] Ein fremdes Gerät erhält keine Zustandsbefehle.
-- [ ] Nach Reconnect erfolgt Reset plus vollständiger Snapshot.
+- [x] Das richtige Gerät wird ohne fest codierte COM-Nummer erkannt.
+- [x] Ein fremdes Gerät erhält keine Zustandsbefehle.
+- [x] Nach Reconnect erfolgt Reset plus vollständiger Snapshot.
 - [ ] Ein blockierter Port verursacht keinen Absturz und wird später erneut geprüft.
-- [ ] Die Board-LED reagiert auf mindestens `RUNNING`, `ASKING` und `FINISHED`.
+- [x] Die Board-LED reagiert auf mindestens `RUNNING`, `ASKING` und `FINISHED`.
 
 ## PoC 5 – End-to-End und Langzeittest
 

@@ -9,13 +9,16 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "build:bluetooth": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/Build-BluetoothHelper.ps1",
     "check": "tsc -p tsconfig.json",
     "dev": "tsx src/main.ts",
+    "dev:bluetooth": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/Start-Bluetooth.ps1",
     "start": "node dist/main.js",
     "test": "tsx --test test/**/*.test.ts"
   },
   "dependencies": {
-    "@opencode/client": "^2.2.7"
+    "@opencode/client": "^2.2.7",
+    "serialport": "^13.0.0"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
