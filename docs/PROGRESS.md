@@ -64,6 +64,8 @@ passende Dokument, nicht in diese Datei.
   `@opencode/client` 2.2.7.
 - **Beobachtung:** Event-Stream und Start-Snapshot konnten mit dem lokalen
   OpenCode-Service verbunden werden. Der Snapshot erkannte eine aktive Session.
+  Die Anwendung wurde anschließend vom Nutzer praktisch ausgeführt und als
+  funktionsfähig bestätigt.
 - **Automatisierung:** 16 Tests bestanden; Typecheck und Build erfolgreich.
 - **Nächster Schritt:** Start, Abschluss, Frage, Berechtigung, Unterbrechung,
   Fehler und parallele Sessions live beobachten.
