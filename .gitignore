@@ -2,6 +2,7 @@
 node_modules/
 dist/
 build/
+host/bin/
 .pio/
 
 # Local configuration and secrets
