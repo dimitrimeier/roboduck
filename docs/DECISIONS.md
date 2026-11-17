@@ -1,363 +1,153 @@
-# Entscheidungen
+# Architecture decisions
 
-Kurze Aufzeichnung verbindlicher technischer Entscheidungen. Neue Einträge
-erhalten Datum, Status, Entscheidung und Begründung.
+This file records accepted technical decisions. New entries should include a
+date, status, decision, and rationale.
 
-## 2026-11-17 – Gemeinsamer Host für Windows und macOS
+## 2026-11-17 — Shared Windows and macOS host
 
-**Status:** Angenommen
+**Status:** Accepted
 
-Zustandsmodell, OpenCode-Anbindung, USB-Serial, Transportkoordination und
-Geräteprotokoll bleiben auf beiden Betriebssystemen identisch. Der bestehende
-Go-BLE-Helper nutzt unter Windows WinRT und unter macOS CoreBluetooth. Das
-passende native Binary wird plattformabhängig ausgewählt und auf dem jeweiligen
-Betriebssystem lokal gebaut. USB bleibt auch auf macOS Primary, BLE warmes
-Standby; die Einzelmodi bleiben verfügbar.
+The state model, OpenCode integration, USB serial path, transport coordination,
+and device protocol are shared. The Go BLE helper uses WinRT on Windows and
+CoreBluetooth on macOS, with a native binary built on each platform. USB remains
+primary and BLE remains warm standby.
 
-**Begründung:** `serialport`, Node.js und `@opencode/client` sind bereits
-plattformübergreifend. `tinygo.org/x/bluetooth` stellt für dieselbe Go-API beide
-nativen BLE-Backends bereit. So bleiben Name-/Servicefilter, Protokoll-Handshake,
-Vollsynchronisation, Keepalive und Failover gleich, ohne eine zweite
-Zustandsimplementierung einzuführen.
+**Rationale:** Node.js, `serialport`, `@opencode/client`, and the Go BLE API are
+cross-platform. Sharing behavior avoids a second state implementation.
 
-## 2026-11-12 – Host als maßgebliche Zustandsquelle
+## 2026-11-12 — Host is the authoritative state source
 
-**Status:** Angenommen
+**Status:** Accepted
 
-Die Windows Host Bridge hält den vollständigen Session- und Anzeigezustand. Der
-Mikrocontroller rendert nur den zuletzt synchronisierten Zustand.
+The host owns complete session and display state. Firmware only renders the
+latest synchronized state. This lets the host recover the display after a
+firmware restart without waiting for new OpenCode events.
 
-**Begründung:** Nach einem Firmware-Neustart oder erneuten Anschließen kann der
-Host die Anzeige vollständig wiederherstellen, ohne auf neue OpenCode-Events zu
-warten.
+## 2026-11-12 — Filtered discovery plus handshake
 
-## 2026-11-12 – Geräteerkennung mit Filter und Handshake
+**Status:** Accepted
 
-**Status:** Angenommen
+Serial devices are pre-filtered by metadata and accepted only after a versioned
+handshake. BLE uses the equivalent name/service filter and handshake. VID/PID or
+BLE advertising alone are not trusted identities.
 
-Serialports werden zunächst anhand ihrer USB-Metadaten gefiltert. Ein Gerät wird
-erst nach erfolgreichem, versioniertem Handshake verwendet.
+## 2026-11-12 — Logical reset and line protocol
 
-**Begründung:** VID/PID sind bei Entwicklungsboards und USB-Serial-Chips nicht
-immer eindeutig. Der Handshake verhindert, dass fremde Geräte Befehle erhalten.
+**Status:** Provisionally accepted
 
-## 2026-11-12 – Logischer statt hardwareabhängiger Reset
+The host sends `RESET_STATE` followed by a complete snapshot rather than
+requiring DTR/RTS reset. The prototype uses a versioned line-oriented text
+protocol because it is easy to inspect and cheap to implement. Checksums or
+binary framing may be reconsidered after the prototype.
 
-**Status:** Angenommen
+## 2026-11-12 — Ports-and-adapters host
 
-Nach einer Verbindung sendet der Host `RESET_STATE` und danach einen kompletten
-Snapshot. Ein DTR/RTS-Hardware-Reset ist keine Voraussetzung.
+**Status:** Accepted
 
-**Begründung:** Das Verhalten beim Öffnen eines COM-Ports unterscheidet sich je
-nach Mikrocontroller und Bootloader.
+OpenCode input, state, orchestration, and outputs are separated by small
+interfaces. The core imports neither the OpenCode SDK nor transport libraries,
+allowing deterministic tests without services or hardware.
 
-## 2026-11-12 – Zeilenbasiertes Protokoll für den Prototyp
+## 2026-11-12 — Privacy-minimized OpenCode events
 
-**Status:** Vorläufig angenommen
+**Status:** Accepted
 
-Der erste Prototyp verwendet ein einfaches, versioniertes Textprotokoll.
+Only event type, session ID, timestamp, and required request IDs enter the core
+or normal output. Prompt, form, resource, provider, and file contents are
+discarded at the adapter boundary to reduce accidental logging or transmission.
 
-**Begründung:** Es ist mit einem Serial-Monitor leicht zu testen und auf kleinen
-Mikrocontrollern unkompliziert zu implementieren. Nach dem Prototyp wird geprüft,
-ob Prüfsummen oder ein binäres Framing notwendig sind.
+## 2026-11-12 — Interruption maps to idle
 
-## 2026-11-12 – Entkoppelter Host mit Ports und Adaptern
+**Status:** Provisionally accepted
 
-**Status:** Angenommen
+User interruption, shutdown, superseding, or inactivity maps to `IDLE`, not
+`ERROR`, because interruption is not necessarily a technical failure.
 
-OpenCode-Quelle, Zustandsverwaltung, Ablaufsteuerung und Ausgaben werden durch
-kleine Schnittstellen getrennt. Das Kernmodell importiert weder das OpenCode-SDK
-noch spätere Serial-Bibliotheken.
+## 2026-11-12 — Periodic snapshot reconciliation
 
-**Begründung:** Eventfolgen, Reconnect und Zeitverhalten lassen sich ohne
-OpenCode-Service oder Hardware automatisiert testen. Der spätere Serial-Adapter
-kann ergänzt werden, ohne die Zustandslogik umzubauen.
+**Status:** Accepted
 
-## 2026-11-12 – Datenschutzarme interne OpenCode-Events
+The active snapshot is reloaded every five seconds by default. Only differences
+emit internal events. This compensates for active-set changes that may not emit
+a live event while avoiding log noise from unchanged results.
 
-**Status:** Angenommen
+## 2026-11-16 — nice!nano-compatible nRF52840 and TinyGo
 
-Der OpenCode-Adapter übernimmt ausschließlich Eventtyp, Session-ID,
-Zeitstempel und technisch erforderliche Request-IDs. Prompt-, Formular-,
-Ressourcen- und Providerinhalte werden nicht in das Kernmodell oder die normale
-Konsolenausgabe übernommen.
+**Status:** Provisionally accepted
 
-**Begründung:** Die Anzeige benötigt nur Zustände. Eine frühe Normalisierung
-reduziert das Risiko, sensible Inhalte versehentlich zu protokollieren oder über
-USB zu übertragen.
+The PoC uses a nice!nano-v2-compatible Pro Micro nRF52840 and TinyGo's
+`nicenano` target. It provides native USB, a validated UF2 bootloader, and BLE.
+The first physical validation used the board LED before external RGB wiring.
 
-## 2026-11-12 – Unterbrechung wird als Idle dargestellt
+## 2026-11-16 — Firmware discards stale host state
 
-**Status:** Vorläufig angenommen
+**Status:** Accepted
 
-Eine durch Benutzer, Shutdown, Superseding oder Inaktivität unterbrochene
-Ausführung wird als `IDLE` und nicht als `ERROR` dargestellt.
+The host sends `PING` every five seconds. After 15 seconds without a valid status
+command or ping, firmware discards the old state and shows the blue connection
+pulse. A host crash must not leave `RUNNING` or `ERROR` displayed indefinitely.
 
-**Begründung:** Eine Unterbrechung ist nicht zwingend ein technischer Fehler.
-Diese Darstellung wird im praktischen PoC geprüft.
+## 2026-11-16 — USB primary with BLE warm standby
 
-## 2026-11-12 – Live-Events durch periodische Abstimmung ergänzen
+**Status:** Accepted; supersedes explicit single-transport default
 
-**Status:** Angenommen
-
-Zusätzlich zum OpenCode-Event-Stream wird der aktive Snapshot standardmäßig alle
-fünf Sekunden neu geladen. Nur tatsächliche Differenzen erzeugen interne
-Host-Events. Das Intervall ist konfigurierbar.
-
-**Begründung:** Der praktische Test zeigte, dass beim Inaktivwerden bzw.
-Schließen einer Session kein passendes Live-Event eintreffen muss. Ohne
-Abstimmung bleibt der lokale Zustand bis zum Neustart fälschlich auf `IDLE`.
-Polling bleibt ein Fallback; unveränderte Ergebnisse erzeugen kein Log-Rauschen.
-
-## 2026-11-16 – Pro Micro nRF52840 als PoC-Board
-
-**Status:** Angenommen
-
-Für den USB- und LED-Prototyp wird ein nice!nano-v2-kompatibles Pro-Micro-
-nRF52840-Board verwendet. Die erste Firmware nutzt nur USB-CDC und die
-steuerbare Board-LED an `P0.15`. Bluetooth bleibt im USB-PoC deaktiviert und
-wird später als alternative Verbindung getrennt bewertet.
-
-**Begründung:** Das vorhandene Board besitzt natives USB, einen bestätigten
-Adafruit-UF2-Bootloader und eine lötfrei nutzbare Status-LED. So können
-Handshake, Geräteerkennung und Reconnect vor der Verdrahtung externer LEDs
-getestet werden. Eine getrennte Bluetooth-Stufe hält den kabelgebundenen
-Basispfad klein und diagnostizierbar.
-
-## 2026-11-16 – TinyGo-Firmware für den ersten PoC
-
-**Status:** Vorläufig angenommen
-
-Die erste Firmware wird mit TinyGo für das offizielle Board-Target `nicenano`
-gebaut. Das Statusprotokoll und der LED-Renderer enthalten keine
-Bluetooth-Abhängigkeit.
-
-**Begründung:** Das Board-Target entspricht der ausgelesenen Board-ID, stellt
-USB-CDC sowie den korrekten LED-Pin bereit und erzeugt direkt eine UF2-Datei.
-Der zuerst geprüfte nRFMicro-Arduino-Core 1.0.2 erzeugte mit der aktuellen
-Arduino CLI 1.6.0 wegen seines Paketnamens keinen gültigen FQBN und wird daher
-nicht zur Projektbasis. Vor dem Bluetooth-Ausbau wird TinyGos nRF52-BLE-Support
-gesondert praktisch bewertet.
-
-## 2026-11-16 – Anzeige verwirft Status ohne Hostaktivität
-
-**Status:** Erweitert durch Start- und Verbindungsanzeige in Firmware 0.4.0
-
-Die Host Bridge überwacht die gewählte USB- oder BLE-Verbindung alle fünf
-Sekunden mit `PING`/`PONG`. Empfängt die Firmware 15 Sekunden lang weder einen
-Statusbefehl noch einen Ping, verwirft sie den alten Status. Seit Firmware 0.4.0
-zeigt sie danach das blaue Verbindungspulsieren statt `OFF`.
-
-**Begründung:** Der Host bleibt die maßgebliche Zustandsquelle. Bei einem
-Host-Absturz oder einer unterbrochenen USB-Verbindung darf die Firmware einen
-alten Zustand wie `RUNNING` oder `ERROR` nicht unbegrenzt weiter anzeigen. Das
-Zeitfenster toleriert einzelne verzögerte Pings, ohne einen veralteten Status
-dauerhaft sichtbar zu lassen.
-
-## 2026-11-16 – Bluetooth LE als explizit wählbarer Transport
-
-**Status:** Ersetzt durch USB-Primary mit Bluetooth-Standby
-
-Firmware 0.3.0 stellt das vorhandene Statusprotokoll parallel über USB-CDC und
-einen eigenen BLE-GATT-Dienst bereit. Die Host Bridge öffnet pro Lauf genau
-einen Transport; `usb` bleibt Standard, `bluetooth` wird über Konfiguration
-ausgewählt. Automatischer Parallelbetrieb oder stiller Wechsel ist zunächst
-ausgeschlossen.
-
-Unter Windows übernimmt ein kleiner Go-Helper den nativen WinRT-GATT-Zugriff
-und tauscht mit dem Node-Host ausschließlich strukturierte lokale JSON-Nachrichten
-aus. BLE-Kandidaten werden anhand von Name und eigenem Service vorgefiltert und
-anschließend mit `HELLO 1` verifiziert. Eine BLE-Adresse wird nicht fest
-gespeichert.
-
-**Begründung:** TinyGos `nicenano`-Target enthält bereits Nordic S140 und wurde
-am realen Board erfolgreich mit `tinygo.org/x/bluetooth` getestet. WinRT nutzt
-den normalen Windows-Bluetooth-Treiber, ohne ihn für eine HCI-Bibliothek ersetzen
-zu müssen. Die explizite Transportwahl verhindert konkurrierende Reset- und
-Statusbefehle über USB und Funk. Der aktuelle offene GATT-Zugriff dient nur dem
-lokalen PoC; der Handshake ist Geräteidentifikation, keine kryptografische
-Authentifizierung.
-
-## 2026-11-16 – USB-Primary mit Bluetooth-Standby als Standard
-
-**Status:** Angenommen
-
-Die Host Bridge hält ohne besondere Konfiguration USB-CDC und Bluetooth LE
-gleichzeitig verbunden. USB ist der bevorzugte aktive Kanal. BLE bleibt nach
-Handshake mit `PING`/`PONG` überwacht im Standby und erhält keine Statusbefehle,
-solange USB verfügbar ist. Bei USB-Ausfall aktiviert der Host BLE und führt dort
-eine vollständige Synchronisation durch. Nach USB-Reconnect übernimmt USB nach
-eigener Vollsynchronisation wieder. `OPENCODE_STATUS_TRANSPORT=usb` bzw.
-`bluetooth` bleibt für Diagnose verfügbar; `both` ist der Standard.
-
-**Begründung:** USB soll im Normalbetrieb deterministisch Vorrang haben, während
-BLE ohne erneute Suche sofort übernehmen kann. Getrennte Verbindungsloops halten
-das Backup warm, ein Koordinator erlaubt aber immer nur einem Kanal
-Statusbefehle. Der reale Test mit Firmware 0.3.0 bestätigte USB `active`, BLE
-`standby`, die Aktivierung von BLE nach kontrolliertem USB-Fehler und den
-automatischen Wechsel zurück zu USB nach Reconnect.
+Without special configuration, USB and BLE stay connected. USB is active while
+BLE receives only keepalives. USB failure activates BLE with full sync; USB
+reconnect synchronizes and takes priority again. `usb` and `bluetooth` modes
+remain available for diagnostics.
 
-## 2026-11-16 – Akkuspannung über internen VDDH-Kanal
+## 2026-11-16 — Battery voltage through internal VDDH input
 
-**Status:** Angenommen
-
-Auf dem geprüften nice!nano-kompatiblen Clone wird die Versorgungsspannung über
-den internen nRF52840-SAADC-Eingang `VDDH/5` gemessen. Der Diagnosebefehl
-`SUPPLY` liefert ADC-Rohwert, Spannung am internen Eingang und kalibrierte
-Versorgungsspannung. Der board-spezifische Faktor `4230/4295` korrigiert die
-unkalibrierten 4,295 V auf die gleichzeitig per Multimeter gemessenen 4,230 V.
-Der beim originalen nice!nano erwartete Akku-Spannungsteiler an `P0.04` wird auf
-diesem Clone nicht zur Ladezustandsbestimmung verwendet.
+**Status:** Accepted for the tested board
 
-**Begründung:** Reale Tests ergaben für `P0.04` auch im Akkubetrieb nur ungefähr
-0,5 V. `VDDH/5` unterschied dagegen USB mit etwa 4,91 V zuverlässig vom Akku
-mit unkalibriert 4,295 V. Nach der Kalibrierung meldeten drei BLE-Abfragen im
-reinen Akkubetrieb 4,220 V, 4,230 V und 4,230 V bei einer Multimeterreferenz von
-4,230 V. Damit ist eine grobe Ladezustandsschätzung ohne zusätzliche
-Verdrahtung möglich. Prozentstufen und Hysterese werden getrennt festgelegt und
-dürfen nicht als präzise Kapazitätsmessung verstanden werden.
+The tested clone does not expose useful battery voltage through the expected
+`P0.04` divider. `SUPPLY` therefore reads `VDDH/5` and applies the board-specific
+factor `4230/4295`, calibrated against a multimeter. This provides coarse levels,
+not precise state of charge, and may vary between boards.
 
-## 2026-11-16 – Zwei getrennt verdrahtete RGB-Augen
+## 2026-11-16 — Two independently wired RGB eyes
 
-**Status:** Vorläufig angenommen
-
-Zwei 4-Pin-RGB-LEDs mit gemeinsamer Kathode werden als Augen verwendet. Die
-Firmware spiegelt ihre Ausgabe zunächst, die spätere Verdrahtung reserviert aber
-Rot, Grün und Blau je Auge separat. Damit bleiben beide Augen später unabhängig
-steuerbar. Jeder der sechs Kanäle erhält einen eigenen Vorwiderstand.
+**Status:** Provisionally accepted
 
-**Begründung:** Gemeinsam verdrahtete Farbkanäle würden GPIOs sparen, eine
-spätere unabhängige Darstellung aber nur durch Neuverdrahtung ermöglichen.
-Konkrete Pins, Widerstände und Treiber hängen noch von Durchlassspannung und
-Versorgungsspannung ab. Als vorläufige maximale Helligkeit werden 10 mA je
-Farbkanal bei 100 % PWM ausgelegt. Bei sechs gleichzeitig aktiven Kanälen sind
-das maximal 60 mA LED-Strom; die GPIOs liefern deshalb nur Steuersignale für
-geeignete Source-Treiber.
+Two common-cathode RGB LEDs will initially mirror each other but reserve six
+independent channels and six resistors. Final pins, resistors, and source drivers
+depend on measured forward voltage and supply. The intended design point is
+10 mA per channel; GPIOs should drive suitable output stages rather than supply
+the final current directly.
 
-## 2026-11-16 – Start- und Verbindungsanzeige in der Firmware
+## 2026-11-17 — Startup, connection, and status display
 
-**Status:** Angenommen
+**Status:** Accepted
 
-Vor dem Hoststatus zeigt die Firmware einen RGB-Funktionstest, danach dreimal
-das gemessene Akkudrittel und anschließend bis zum Handshake ein blaues Pulsieren.
-Ein gültiger USB- oder BLE-Handshake wird mit drei kurzen blauen Blinkern
-bestätigt. Die Drittelgrenzen sind vorläufig 3,60 V und 3,90 V; eine erkannte
-USB-Versorgung über 4,40 V wird gelb als „Akkustand unbekannt“ dargestellt. Bei
-Host-Timeout kehrt die Anzeige in die Verbindungssuche zurück.
+Firmware runs an RGB self-test, shows battery level, pulses blue while waiting
+for a handshake, and confirms connection with three blue flashes. Host states
+then use mixed-color running fade, yellow/green asking flashes, green finished
+pulse, and green idle double flash. The internal red board LED remains off.
 
-**Begründung:** Die Firmware kennt Boot, lokale Versorgung und
-Transportaktivität unmittelbar und kann diese Phasen ohne Hostverbindung
-anzeigen. Der Host bleibt weiterhin alleinige Quelle des nachfolgenden
-OpenCode-Status. Die Statusfarben selbst werden später festgelegt.
+## 2026-11-17 — First RGB eye pin assignment
 
-## 2026-11-17 – Pinbelegung des ersten RGB-Auges
+**Status:** Accepted for the prototype
 
-**Status:** Angenommen
+The first common-cathode eye uses `D104`/`P1.04` for red, `D106`/`P1.06` for
+green, and `D011`/`P0.11` for blue with separate resistors and non-inverted PWM.
+The direct connection is a reduced-current test, not the final 10 mA circuit.
 
-Das erste Common-Cathode-RGB-Auge verwendet `D104` (`P1.04`) für Rot, `D106`
-(`P1.06`) für Grün und `D011` (`P0.11`) für Blau. Die gemeinsame Kathode liegt
-an GND. Jeder Kanal besitzt einen eigenen Vorwiderstand und wird nicht
-invertiert per Hardware-PWM angesteuert.
+## 2026-11-17 — Global output limit
 
-**Begründung:** Die drei Pins sind beim installierten TinyGo-`nicenano`-Target
-als allgemeine GPIOs bestätigt und kollidieren weder mit USB, Akku-ADC noch der
-Board-LED. Zusammen mit `P0.15` nutzen sie exakt die vier Kanäle von `PWM0`.
-Der direkte Aufbau dient zunächst nur dem stromreduzierten Funktionstest; die
-spätere 10-mA-Auslegung erhält weiterhin Source-Treiber.
+**Status:** Accepted; 65% supersedes the earlier 80% limit
 
-## 2026-11-17 – Globale LED-Ausgabe auf 80 Prozent begrenzt
+Firmware 0.6.2 limits physical PWM output to 166/255 (about 65%) for every
+startup, battery, connection, and status phase. The additional 15% relative
+limit for `RUNNING` still applies.
 
-**Status:** Angenommen
+## 2026-11-17 — Finalized prototype animation details
 
-Firmware 0.5.1 reduziert jede physische PWM-Ausgabe global um 20 Prozent. Der
-höchste mögliche Tastgrad beträgt damit auch bei `BRIGHTNESS 255` nur 80 Prozent.
-Die Skalierung gilt einheitlich für externe RGB-Kanäle, Board-LED, Startsequenz,
-Akkuanzeige, Verbindungsmuster und Statusanzeige.
+**Status:** Accepted
 
-**Begründung:** Das erste externe RGB-Auge war im realen Aufbau zu hell. Eine
-zentrale Grenze erhält alle relativen Farb- und Animationsverläufe und verhindert,
-dass ein späterer Helligkeitsbefehl versehentlich wieder 100 Prozent ausgibt.
-
-## 2026-11-17 – Globale LED-Ausgabe auf 65 Prozent reduziert
-
-**Status:** Angenommen; ersetzt die 80-Prozent-Grenze
-
-Firmware 0.6.2 begrenzt jede physische PWM-Ausgabe global auf etwa 65 Prozent
-beziehungsweise 166 von 255 Ausgangsstufen. Die Grenze gilt für Start-, Akku-,
-Verbindungs- und sämtliche Statusanzeigen. Die zusätzliche relative
-15-Prozent-Grenze für `RUNNING` bleibt bestehen.
-
-**Begründung:** Die gesamte externe RGB-Anzeige soll gegenüber der bisherigen
-80-Prozent-Grenze weiter abgedunkelt werden, ohne Farbverhältnisse oder
-Animationstiming zu verändern.
-
-## 2026-11-17 – RGB-Funktionstest mit weichen Farbübergängen
-
-**Status:** Angenommen
-
-Firmware 0.6.3 ersetzt die getrennten Farben und dunklen Zwischenpausen des
-initialen Funktionstests durch einen kontinuierlichen Verlauf. Rot geht in
-1,1 Sekunden in Gelb und Gelb anschließend in weiteren 1,1 Sekunden in Grün
-über. Die Gesamtdauer von 2,2 Sekunden bleibt unverändert; die nachfolgende
-500-ms-Pause und Akkuanzeige ändern sich nicht.
-
-**Begründung:** Der weich interpolierte Verlauf wirkt ruhiger und zeigt dennoch
-alle drei RGB-Kanäle sowie deren Mischbetrieb während der Initialisierung.
-
-## 2026-11-17 – Neuer Initialisierungs- und RGB-Statusablauf
-
-**Status:** Angenommen; ersetzt die Akku-Blinkfolge und vorläufigen Statusmuster
-
-Firmware 0.6.0 zeigt nach Rot, Gelb und Grün 500 ms Dunkelheit, anschließend
-die Akkufarbe 1,5 Sekunden dauerhaft und danach eine weitere Sekunde Dunkelheit,
-bevor die Verbindungsphase beginnt. Die interne rote Board-LED an `P0.15` bleibt
-vollständig deaktiviert.
-
-Im Hoststatus läuft `RUNNING` als Verlauf aus warmem Pink, Violett und
-Türkisgrün bei 15 Prozent relativer Helligkeit. `ASKING` behält die bisherigen
-zwei 120-ms-Leuchtfenster und Pausen,
-verwendet aber Gelb und Grün. `FINISHED` pulsiert grün, bis der Host zu `IDLE`
-wechselt. `IDLE` wiederholt zwei kurze grüne Blinker mit drei Sekunden Pause.
-Bekannte Idle-Sessions bleiben auch dann erhalten, wenn der aktive Snapshot sie
-nicht mehr enthält; explizites Löschen oder Archivieren beendet die Anzeige.
-
-**Begründung:** Die Startfolge trennt Funktionstest, Akkuzustand und Verbindung
-klar voneinander. Die neuen Statusmuster bleiben auch bei längerer Inaktivität
-erkennbar und unterscheiden Arbeit, Rückfrage und Abschluss farblich eindeutig.
-
-## 2026-11-17 – FINISHED auf maximal fünf Sekunden begrenzt
-
-**Status:** Angenommen
-
-Der Host hält `FINISHED` standardmäßig und maximal fünf Sekunden. Die optionale
-Umgebungsvariable darf eine kürzere Dauer festlegen; höhere Werte werden auf
-fünf Sekunden begrenzt. Danach wechselt der Zustand zu `IDLE` und damit zum
-dauerhaften grünen Doppelblinkmuster.
-
-**Begründung:** Der pulsierende Abschluss soll deutlich sichtbar sein, aber die
-anschließende Bereitschaftsanzeige nicht länger als fünf Sekunden verzögern.
-
-## 2026-11-17 – RUNNING verwendet ausschließlich Mischfarben
-
-**Status:** Angenommen
-
-Firmware 0.6.4 ersetzt die reinen roten, blauen und grünen Wendepunkte des
-`RUNNING`-Verlaufs durch warmes Pink (`255,48,112`), Violett (`112,48,255`) und
-Türkisgrün (`48,255,144`). Zwischen diesen Farben wird weiterhin weich
-interpoliert; dadurch sind auch an jedem Wendepunkt mehrere Kanäle aktiv.
-
-**Begründung:** Reine Grundfarben besitzen in Start-, Akku-, Verbindungs- und
-anderen Statusphasen eigene Bedeutungen. Ausschließliche Mischfarben verhindern
-eine Fehlinterpretation des laufenden Arbeitszustands.
-
-## 2026-11-17 – Gestufte Helligkeit beim Idle-Doppelblinken
-
-**Status:** Angenommen
-
-Firmware 0.6.5 zeigt den ersten grünen Idle-Blinker mit 20 Prozent relativer
-Helligkeit und den zweiten mit voller logischer Helligkeit. Auf beide wird die
-globale Ausgangsgrenze angewendet. Leuchtdauer, Zwischenpause und anschließende
-drei Sekunden Pause bleiben unverändert.
-
-**Begründung:** Die ansteigende Helligkeit macht das Idle-Signal markanter, ohne
-die ruhige Wiederholungsfrequenz oder die globale Helligkeitsbegrenzung zu ändern.
+- Firmware 0.6.3 changed the 2.2-second RGB self-test to continuous
+  red-to-yellow-to-green interpolation.
+- `FINISHED` is held for no more than five seconds.
+- Firmware 0.6.4 uses only warm pink (`255,48,112`), violet (`112,48,255`), and
+  turquoise-green (`48,255,144`) control points for `RUNNING`.
+- Firmware 0.6.5 renders the first idle flash at 20% relative brightness and the
+  second at full logical brightness before the global limit.

@@ -1,63 +1,102 @@
 # OpenCode Status Light
 
-Eine externe LED-Statusanzeige für OpenCode-Sessions unter Windows und macOS. Ein lokaler
-Host-Dienst beobachtet OpenCode, erkennt den Mikrocontroller automatisch über
-USB-Serial oder Bluetooth LE und überträgt den aktuellen Zustand an dessen LEDs.
+An external LED status display for OpenCode sessions on Windows and macOS. A
+local host bridge observes OpenCode, discovers the microcontroller over USB
+serial or Bluetooth Low Energy, and sends the current aggregate state to its
+LEDs.
 
-## Ziel
+> [!IMPORTANT]
+> This project is an active hardware proof of concept. Interfaces, wiring, and
+> behavior may still change. No license has been selected yet; all rights are
+> reserved unless a license is added later.
 
-Auf einen Blick erkennen, ob OpenCode-Agenten arbeiten, auf eine Eingabe warten,
-fertig sind, einen Fehler melden oder ob keine Session aktiv ist.
+## What it shows
 
-## Geplante Komponenten
-
-- **Windows/macOS Host Bridge:** liest OpenCode-Events und verwaltet den Gesamtzustand
-- **USB/BLE-Verbindung:** automatische Geräteerkennung, Handshake und Reconnect
-- **Mikrocontroller-Firmware:** steuert zunächst die Board-LED, später externe LEDs
-- **Dokumentation:** hält Features, Architektur, Entscheidungen und Fortschritt fest
-
-## Dokumentation
-
-- [Features](docs/FEATURES.md)
-- [Architektur](docs/ARCHITECTURE.md)
-- [Roadmap](docs/ROADMAP.md)
-- [Proof of Concept](docs/POC.md)
-- [Fortschritt](docs/PROGRESS.md)
-- [Entscheidungen](docs/DECISIONS.md)
-
-## Aktueller Stand
-
-Firmware 0.6.5 läuft auf einem nice!nano-v2-kompatiblen Pro-Micro-nRF52840-
-Board und bietet USB-CDC sowie Bluetooth LE. Die Host Bridge hält standardmäßig
-USB als aktiven Primary und Bluetooth als verbundenes Backup im Standby. Jede
-Verbindung wird anhand von Metadaten bzw. BLE-Service und zusätzlich per
-Protokoll-Handshake verifiziert. Reale End-to-End-Läufe sowie kontrollierter
-Failover zu BLE, Failback zu USB, USB-Reconnect und Firmware-Watchdog sind
-bestätigt. Der Host unterstützt auf macOS dieselbe Zustandslogik, USB-Erkennung
-und BLE-Anbindung über CoreBluetooth; der reale Hardwaretest auf einem Mac steht
-noch aus. Die Versorgungsspannung lässt sich ohne Zusatzverdrahtung über den
-internen nRF52840-Kanal `VDDH/5` messen; die board-spezifische Kalibrierung wurde
-im Akkubetrieb über BLE gegen ein Multimeter bestätigt. Der geplante RGB-Start-,
-Akku- und Verbindungsablauf steuert das erste extern verdrahtete RGB-Auge per
-Hardware-PWM. Die interne rote Board-LED ist deaktiviert. Die Statusanzeige
-verwendet RGB-Verläufe und nicht blockierende Blink- bzw. Pulsmuster.
-
-## Repository-Struktur
+The display indicates whether OpenCode agents are working, waiting for input,
+finished, idle, reporting an error, or whether no relevant session is known.
 
 ```text
-host/       Windows/macOS Host Bridge und automatisierte Tests
-firmware/   Mikrocontroller-Firmware und Hardware-Testwerkzeuge
-docs/       Planung und Projektdokumentation
+ERROR > ASKING > RUNNING > FINISHED > IDLE > OFF
 ```
 
-## Vorgesehener Technik-Stack
+## Components
 
-- TypeScript/Node.js für die Windows/macOS Host Bridge
-- `@opencode/client` für OpenCode API und Event-Stream
-- `serialport` für USB-Serial
-- Go-Bluetooth-Helper mit WinRT unter Windows und CoreBluetooth unter macOS
-- nice!nano-v2-kompatibles Pro-Micro-nRF52840-Board
-- TinyGo für die nRF52840-Firmware
-- zunächst Board-LED, später zwei unabhängig verdrahtete RGB-LEDs als Augen
+- **Windows/macOS host bridge:** reads OpenCode events and owns the complete
+  display state.
+- **USB/BLE transport:** discovers devices, verifies them with a protocol
+  handshake, reconnects, and performs full synchronization.
+- **Microcontroller firmware:** renders the state on an nRF52840-based board.
+- **Documentation:** records features, architecture, decisions, and progress.
 
-Der Stack gilt bis zur ersten technischen Erprobung als vorläufig.
+## Current status
+
+Firmware 0.6.5 runs on a nice!nano-v2-compatible Pro Micro nRF52840 board and
+supports USB CDC and Bluetooth LE. By default, USB is the active primary
+transport while BLE remains connected as a warm standby. Candidates are
+filtered by USB metadata or the project-specific BLE service and are always
+verified with the protocol handshake before receiving status commands.
+
+End-to-end operation, USB reconnect, firmware watchdog behavior, and controlled
+failover to BLE and failback to USB have been tested on Windows. The host also
+supports macOS through `serialport` and CoreBluetooth, but a native macOS build
+and hardware test are still pending.
+
+The first external common-cathode RGB eye is driven with hardware PWM. Startup,
+battery, connection, and OpenCode states use non-blocking fades, blinks, and
+pulses. The internal red board LED is disabled.
+
+## Quick start
+
+Requirements: Node.js 22 or newer, OpenCode V2 with its local background
+service, and the supported board flashed with this repository's firmware.
+
+```sh
+cd host
+npm install
+npm run build:bluetooth
+npm run dev
+```
+
+See [host/README.md](host/README.md) for host setup and
+[firmware/README.md](firmware/README.md) for building, flashing, and wiring.
+
+## Documentation
+
+- [Features](docs/FEATURES.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Roadmap](docs/ROADMAP.md)
+- [Proof-of-concept plan](docs/POC.md)
+- [Progress](docs/PROGRESS.md)
+- [Architecture decisions](docs/DECISIONS.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security](SECURITY.md)
+
+## Repository layout
+
+```text
+host/       Windows/macOS host bridge and automated tests
+firmware/   Microcontroller firmware and hardware test tools
+docs/       Planning and project documentation
+```
+
+## Technology
+
+- TypeScript and Node.js
+- `@opencode/client` for the OpenCode API and event stream
+- `serialport` for USB serial
+- A Go BLE helper using WinRT on Windows and CoreBluetooth on macOS
+- TinyGo firmware for a nice!nano-v2-compatible nRF52840 board
+
+## Privacy and device safety
+
+The normal host output contains timestamps, event types, session IDs, and
+derived states, but no prompts, form contents, file contents, or OpenCode error
+messages. The bridge does not blindly open serial ports: it filters candidates
+by metadata and requires a successful device handshake. BLE candidates are
+filtered by name and service and require the same handshake.
+
+## License
+
+No license has been selected. Until a license file is added, the source is
+available for inspection but no permission to copy, modify, or redistribute it
+is granted.
