@@ -27,13 +27,15 @@ fertig sind, einen Fehler melden oder ob keine Session aktiv ist.
 
 ## Aktueller Stand
 
-Das Projekt befindet sich in der Planungsphase. Hardware, LED-Anzahl und die
-genaue Darstellung mehrerer Sessions sind noch nicht endgültig festgelegt.
+Der testbare Host-Kern und der OpenCode-Beobachter ohne USB sind implementiert.
+Die realen Eventfälle aus PoC 1 werden als Nächstes praktisch verifiziert.
+Hardware, LED-Anzahl und die genaue Darstellung mehrerer Sessions sind noch
+nicht endgültig festgelegt.
 
 ## Repository-Struktur
 
 ```text
-host/       Windows Host Bridge (später)
+host/       Windows Host Bridge und automatisierte Tests
 firmware/   Mikrocontroller-Firmware (später)
 docs/       Planung und Projektdokumentation
 ```

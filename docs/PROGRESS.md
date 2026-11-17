@@ -4,10 +4,12 @@ Zuletzt aktualisiert: 2026-11-12
 
 ## Aktueller Status
 
-**Phase:** Planung / Phase 0
+**Phase:** Proof of Concept / PoC 1
 
-Das lokale Repository und die initiale Projektdokumentation wurden angelegt.
-Es existiert noch keine Host- oder Firmware-Implementierung.
+Der Host-Kern, die OpenCode-Anbindung und die Konsolenausgabe sind ohne USB
+implementiert. Automatisierte Tests sind erfolgreich; die verschiedenen realen
+OpenCode-Ereignisse müssen noch systematisch manuell erzeugt und protokolliert
+werden. Es existiert noch keine Firmware.
 
 ## Erledigt
 
@@ -20,14 +22,26 @@ Es existiert noch keine Host- oder Firmware-Implementierung.
 - [x] Roadmap erstellt.
 - [x] Risikobasierten Proof-of-Concept-Plan mit Go/No-Go-Kriterien erstellt.
 - [x] Lokales Git-Repository vorbereitet.
+- [x] Testbare Host-Struktur aus Core, Ports, Anwendung und Adaptern angelegt.
+- [x] Aktive Sessions sowie offene Formulare und Berechtigungen als Start-Snapshot
+  angebunden.
+- [x] Relevante OpenCode-Events datenschutzarm normalisiert.
+- [x] Zustandsmodell mit Gesamtpriorität und zeitlich begrenztem `FINISHED`
+  implementiert.
+- [x] Reconnect mit exponentiellem Backoff implementiert.
+- [x] Konsolenausgabe als JSON Lines implementiert.
+- [x] OpenCode-Adapter erfolgreich mit dem lokalen Service verbunden und einen
+  Snapshot mit einer aktiven Session geladen.
+- [x] 16 automatisierte Tests sowie Typecheck und Build erfolgreich ausgeführt.
 
 ## Als Nächstes
 
-1. PoC 1 aus `docs/POC.md` durchführen: OpenCode-Events ohne Hardware prüfen.
-2. Zustandsmodell mit synthetischen Ereignissen testen.
-3. Erst danach ein vorhandenes oder günstiges Entwicklungsboard für den
+1. Die realen Eventfälle aus PoC 1 mit `npm run dev` systematisch prüfen.
+2. Ergebnisse und eventuelle Abweichungen des OpenCode-Verhaltens dokumentieren.
+3. Danach PoC 2 mit zusätzlichen Grenz- und Reihenfolgetests abschließen.
+4. Erst danach ein vorhandenes oder günstiges Entwicklungsboard für den
    lötfreien USB-Test auswählen.
-4. Bei erfolgreichem End-to-End-PoC die finale LED-Hardware festlegen.
+5. Bei erfolgreichem End-to-End-PoC die finale LED-Hardware festlegen.
 
 ## Offene Fragen
 
@@ -42,3 +56,14 @@ Es existiert noch keine Host- oder Firmware-Implementierung.
 Neue Arbeitseinheiten hier kurz mit Datum, Ergebnis und nächstem Schritt
 ergänzen. Ausführliche technische Beschreibungen gehören in das jeweils
 passende Dokument, nicht in diese Datei.
+
+### 2026-11-12 – PoC-Host ohne USB
+
+- **Ergebnis:** Implementierung abgeschlossen, reale Eventmatrix noch offen.
+- **Umgebung:** Windows, Node.js 24.19.0, OpenCode 2.2.7,
+  `@opencode/client` 2.2.7.
+- **Beobachtung:** Event-Stream und Start-Snapshot konnten mit dem lokalen
+  OpenCode-Service verbunden werden. Der Snapshot erkannte eine aktive Session.
+- **Automatisierung:** 16 Tests bestanden; Typecheck und Build erfolgreich.
+- **Nächster Schritt:** Start, Abschluss, Frage, Berechtigung, Unterbrechung,
+  Fehler und parallele Sessions live beobachten.

@@ -27,6 +27,12 @@ Die Host Bridge soll als normale Hintergrundanwendung beginnen. Eine spätere
 Ausführung über Windows-Autostart oder als Dienst wird erst nach dem Prototyp
 entschieden.
 
+Die aktuelle Implementierung liegt in `host/` und verwendet eine Ports-und-
+Adapter-Struktur. Der reine Kern kennt weder OpenCode noch USB. Die
+OpenCode-spezifischen Eventdaten werden direkt am Adapter auf minimale interne
+Events reduziert. Eine Konsolenausgabe ist der erste Ausgabeadapter; Serial
+wird später als zusätzlicher Adapter ergänzt.
+
 ### OpenCode-Adapter
 
 - Verbindet sich über `@opencode/client` mit dem lokalen OpenCode-Service.
