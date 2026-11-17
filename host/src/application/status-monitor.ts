@@ -1,6 +1,7 @@
 import { StatusStore } from "../core/status-store.js";
 import type { StatusReporter } from "../ports/status-reporter.js";
 import type { StatusConnection, StatusSource } from "../ports/status-source.js";
+import { reconcileSnapshot } from "./reconcile-snapshot.js";
 
 export interface Scheduler {
   every(intervalMs: number, callback: () => void): () => void;
@@ -11,6 +12,7 @@ export interface StatusMonitorOptions {
   readonly initialRetryMs?: number;
   readonly maximumRetryMs?: number;
   readonly tickIntervalMs?: number;
+  readonly pollIntervalMs?: number;
   readonly scheduler?: Scheduler;
 }
 
@@ -49,6 +51,7 @@ export class StatusMonitor {
   readonly #initialRetryMs: number;
   readonly #maximumRetryMs: number;
   readonly #tickIntervalMs: number;
+  readonly #pollIntervalMs: number;
   readonly #scheduler: Scheduler;
 
   constructor(
@@ -63,6 +66,7 @@ export class StatusMonitor {
     this.#initialRetryMs = options.initialRetryMs ?? 1_000;
     this.#maximumRetryMs = options.maximumRetryMs ?? 30_000;
     this.#tickIntervalMs = options.tickIntervalMs ?? 1_000;
+    this.#pollIntervalMs = options.pollIntervalMs ?? 5_000;
     this.#scheduler = options.scheduler ?? SYSTEM_SCHEDULER;
   }
 
@@ -89,14 +93,7 @@ export class StatusMonitor {
           this.#reporter.connected(this.#store.view());
           retryInMs = this.#initialRetryMs;
 
-          for await (const event of connection.events) {
-            if (signal.aborted) {
-              break;
-            }
-
-            this.#store.apply(event);
-            this.#reporter.eventReceived(event, this.#store.view());
-          }
+          await this.#consume(connection, signal);
 
           if (!signal.aborted) {
             throw new Error("OpenCode event stream ended");
@@ -123,6 +120,48 @@ export class StatusMonitor {
       }
     } finally {
       stopTicking();
+    }
+  }
+
+  async #consume(connection: StatusConnection, signal: AbortSignal): Promise<void> {
+    const iterator = connection.events[Symbol.asyncIterator]();
+    let pendingEvent = iterator.next();
+
+    while (!signal.aborted) {
+      const pollController = new AbortController();
+      const onAbort = () => pollController.abort();
+      signal.addEventListener("abort", onAbort, { once: true });
+
+      const result = await Promise.race([
+        pendingEvent.then((event) => ({ kind: "event" as const, event })),
+        this.#scheduler
+          .wait(this.#pollIntervalMs, pollController.signal)
+          .then(() => ({ kind: "poll" as const })),
+      ]);
+
+      signal.removeEventListener("abort", onAbort);
+      pollController.abort();
+
+      if (signal.aborted) {
+        break;
+      }
+
+      if (result.kind === "event") {
+        if (result.event.done) {
+          throw new Error("OpenCode event stream ended");
+        }
+
+        this.#store.apply(result.event.value);
+        this.#reporter.eventReceived(result.event.value, this.#store.view());
+        pendingEvent = iterator.next();
+        continue;
+      }
+
+      const snapshot = await connection.refreshSnapshot();
+      for (const event of reconcileSnapshot(this.#store.view(), snapshot)) {
+        this.#store.apply(event);
+        this.#reporter.eventReceived(event, this.#store.view());
+      }
     }
   }
 }

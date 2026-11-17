@@ -52,6 +52,12 @@ wird später als zusätzlicher Adapter ergänzt.
   - `session.deleted`
 - Der OpenCode-Event-Stream ist live-only. Nach jeder Neuverbindung ist daher
   eine vollständige Resynchronisation erforderlich.
+- Weil nicht jeder Wechsel aus der aktiven Session-Menge ein Live-Event erzeugt,
+  wird der aktive Snapshot zusätzlich periodisch abgefragt. Nur erkannte
+  Differenzen werden als interne Events `host.session.inactive` bzw.
+  `host.session.reconciled` weitergegeben.
+- Ein fehlender Snapshot-Eintrag entfernt `FINISHED` nicht vor Ablauf seiner
+  Haltezeit. Nach dem Wechsel zu `IDLE` entfernt der nächste Poll die Session.
 - Die relevanten OpenCode-Endpunkte sind teilweise experimentell; Updates
   können Anpassungen notwendig machen.
 

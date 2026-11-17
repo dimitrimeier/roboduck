@@ -74,7 +74,11 @@ export class StatusStore {
   }
 
   apply(event: StatusEvent): void {
-    if (event.type === "session.deleted" || event.type === "session.archived") {
+    if (
+      event.type === "session.deleted" ||
+      event.type === "session.archived" ||
+      event.type === "host.session.inactive"
+    ) {
       this.#sessions.delete(event.sessionId);
       return;
     }
@@ -142,6 +146,16 @@ export class StatusStore {
         state.pendingAttention.delete(event.attentionKey);
         state.finishedUntil = undefined;
         state.status = state.pendingAttention.size > 0 ? "asking" : state.running ? "running" : "idle";
+        break;
+
+      case "host.session.reconciled":
+        state.pendingAttention.clear();
+        for (const attention of event.pendingAttention) {
+          state.pendingAttention.set(attention.key, attention);
+        }
+        state.running = event.running;
+        state.finishedUntil = undefined;
+        state.status = state.pendingAttention.size > 0 ? "asking" : event.running ? "running" : "idle";
         break;
     }
   }

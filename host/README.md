@@ -55,6 +55,25 @@ $env:OPENCODE_STATUS_FINISHED_HOLD_MS = "5000"
 npm run dev
 ```
 
+Zusätzlich gleicht die Anwendung den Zustand standardmäßig alle fünf Sekunden
+mit der OpenCode-API ab. Dadurch werden Änderungen erkannt, für die kein
+Live-Event gesendet wurde. Das Intervall lässt sich für Tests anpassen:
+
+```powershell
+$env:OPENCODE_STATUS_POLL_INTERVAL_MS = "2000"
+npm run dev
+```
+
+Bei einer erkannten Abweichung entstehen synthetische Events:
+
+- `host.session.inactive`: Eine zuvor bekannte Session ist nicht mehr aktiv.
+- `host.session.reconciled`: Eine aktive Session oder ihre offenen Anfragen
+  wurden über den Snapshot neu erkannt.
+
+Unveränderte Poll-Ergebnisse erzeugen weder Events noch Logausgaben. Eine
+Session in `FINISHED` bleibt zunächst für ihre konfigurierte Haltezeit sichtbar
+und wird erst danach durch die Abstimmung entfernt.
+
 ## Qualitätsprüfungen
 
 ```powershell
