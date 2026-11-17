@@ -43,3 +43,38 @@ Der erste Prototyp verwendet ein einfaches, versioniertes Textprotokoll.
 **Begründung:** Es ist mit einem Serial-Monitor leicht zu testen und auf kleinen
 Mikrocontrollern unkompliziert zu implementieren. Nach dem Prototyp wird geprüft,
 ob Prüfsummen oder ein binäres Framing notwendig sind.
+
+## 2026-11-12 – Entkoppelter Host mit Ports und Adaptern
+
+**Status:** Angenommen
+
+OpenCode-Quelle, Zustandsverwaltung, Ablaufsteuerung und Ausgaben werden durch
+kleine Schnittstellen getrennt. Das Kernmodell importiert weder das OpenCode-SDK
+noch spätere Serial-Bibliotheken.
+
+**Begründung:** Eventfolgen, Reconnect und Zeitverhalten lassen sich ohne
+OpenCode-Service oder Hardware automatisiert testen. Der spätere Serial-Adapter
+kann ergänzt werden, ohne die Zustandslogik umzubauen.
+
+## 2026-11-12 – Datenschutzarme interne OpenCode-Events
+
+**Status:** Angenommen
+
+Der OpenCode-Adapter übernimmt ausschließlich Eventtyp, Session-ID,
+Zeitstempel und technisch erforderliche Request-IDs. Prompt-, Formular-,
+Ressourcen- und Providerinhalte werden nicht in das Kernmodell oder die normale
+Konsolenausgabe übernommen.
+
+**Begründung:** Die Anzeige benötigt nur Zustände. Eine frühe Normalisierung
+reduziert das Risiko, sensible Inhalte versehentlich zu protokollieren oder über
+USB zu übertragen.
+
+## 2026-11-12 – Unterbrechung wird als Idle dargestellt
+
+**Status:** Vorläufig angenommen
+
+Eine durch Benutzer, Shutdown, Superseding oder Inaktivität unterbrochene
+Ausführung wird als `IDLE` und nicht als `ERROR` dargestellt.
+
+**Begründung:** Eine Unterbrechung ist nicht zwingend ein technischer Fehler.
+Diese Darstellung wird im praktischen PoC geprüft.
