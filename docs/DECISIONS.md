@@ -3,6 +3,23 @@
 Kurze Aufzeichnung verbindlicher technischer Entscheidungen. Neue Einträge
 erhalten Datum, Status, Entscheidung und Begründung.
 
+## 2026-11-17 – Gemeinsamer Host für Windows und macOS
+
+**Status:** Angenommen
+
+Zustandsmodell, OpenCode-Anbindung, USB-Serial, Transportkoordination und
+Geräteprotokoll bleiben auf beiden Betriebssystemen identisch. Der bestehende
+Go-BLE-Helper nutzt unter Windows WinRT und unter macOS CoreBluetooth. Das
+passende native Binary wird plattformabhängig ausgewählt und auf dem jeweiligen
+Betriebssystem lokal gebaut. USB bleibt auch auf macOS Primary, BLE warmes
+Standby; die Einzelmodi bleiben verfügbar.
+
+**Begründung:** `serialport`, Node.js und `@opencode/client` sind bereits
+plattformübergreifend. `tinygo.org/x/bluetooth` stellt für dieselbe Go-API beide
+nativen BLE-Backends bereit. So bleiben Name-/Servicefilter, Protokoll-Handshake,
+Vollsynchronisation, Keepalive und Failover gleich, ohne eine zweite
+Zustandsimplementierung einzuführen.
+
 ## 2026-11-12 – Host als maßgebliche Zustandsquelle
 
 **Status:** Angenommen

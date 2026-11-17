@@ -7,7 +7,7 @@ OpenCode Background Service
           │
           │ HTTP API + Live-Event-Stream
           ▼
-Windows Host Bridge
+Windows/macOS Host Bridge
   ├─ OpenCode-Adapter
   ├─ Zustandsverwaltung
   ├─ Geräteerkennung
@@ -23,9 +23,9 @@ Mikrocontroller-Firmware
 
 ## Host Bridge
 
-Die Host Bridge soll als normale Hintergrundanwendung beginnen. Eine spätere
-Ausführung über Windows-Autostart oder als Dienst wird erst nach dem Prototyp
-entschieden.
+Die Host Bridge beginnt als normale Hintergrundanwendung. Eine spätere
+Ausführung über den jeweiligen Autostart oder als Dienst wird erst nach dem
+Prototyp entschieden.
 
 Die aktuelle Implementierung liegt in `host/` und verwendet eine Ports-und-
 Adapter-Struktur. Der reine Kern kennt weder OpenCode noch USB oder BLE. Die
@@ -102,12 +102,16 @@ bestätigt. Der UF2-Bootloader verwendet dagegen `239A:00B3` und ist kein
 Kandidat für Statusbefehle. Auch nach diesem Metadatenfilter bleibt der
 `HELLO 1`/`DEVICE OPENCODE_STATUS`-Handshake zwingend.
 
-Für Bluetooth filtert ein Go-Helper über die Windows-WinRT-API zunächst auf den
+Für Bluetooth filtert ein Go-Helper über WinRT unter Windows beziehungsweise
+CoreBluetooth unter macOS zunächst auf den
 lokalen Namen `OCStatus` und den projektspezifischen GATT-Dienst
 `78B13697-8A60-4161-A989-69661675E94A`. Er entdeckt die BLE-Adresse dynamisch,
 abonniert die TX-Characteristic und reicht nur zeilenweise
 Protokollanforderungen und -antworten per JSON Lines an den Node-Host weiter.
-Auch hier bleibt der Protokoll-Handshake zwingend.
+Auch hier bleibt der Protokoll-Handshake zwingend. Der Node-Host wählt abhängig
+vom Betriebssystem automatisch die Windows-Datei mit `.exe` oder das
+erweiterungslose macOS-Binary. Der macOS-Helper wird nativ auf dem Mac gebaut,
+weil die CoreBluetooth-Bindings keinen Cross-Build unterstützen.
 
 Der Standardmodus `both` startet USB- und BLE-Verbindung parallel. Jeder Adapter
 führt Suche, Handshake, Keepalive und Reconnect unabhängig aus. Solange USB
