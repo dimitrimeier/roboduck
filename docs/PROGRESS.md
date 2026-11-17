@@ -14,6 +14,9 @@ OpenCode-End-to-End-Läufe waren über beide Transportwege erfolgreich.
 Der neue Standardmodus hält USB als Primary und BLE als warmes Backup verbunden.
 Kontrollierter Failover und Failback, physischer USB-Reconnect und
 Firmware-Watchdog sind praktisch bestätigt.
+Der Host ist zusätzlich für macOS vorbereitet: USB nutzt weiterhin `serialport`,
+BLE denselben Go-Helper über CoreBluetooth. Build, automatisierte Tests und ein
+realer Hardwarelauf auf macOS stehen noch aus.
 
 ## Erledigt
 
@@ -85,6 +88,8 @@ Firmware-Watchdog sind praktisch bestätigt.
 - [x] `RUNNING`-Verlauf in Firmware 0.6.4 vollständig auf Mischfarben umgestellt.
 - [x] Idle-Doppelblinken in Firmware 0.6.5 auf 20 Prozent beim ersten und volle
   global begrenzte Helligkeit beim zweiten Blinker gestuft.
+- [x] Separaten Branch `feature/macos-host` angelegt und Hostskripte,
+  BLE-Helper-Auswahl sowie Dokumentation für macOS/CoreBluetooth portiert.
 
 ## Als Nächstes
 
@@ -97,6 +102,8 @@ Firmware-Watchdog sind praktisch bestätigt.
 6. Mindestens zweistündigen Primary/Backup-Langzeittest durchführen.
 7. Durchlassspannungen der zwei Common-Cathode-RGB-LEDs bestimmen, danach für
    10 mA je Kanal sechs Vorwiderstände, PWM-Pins und Source-Treiber festlegen.
+8. BLE-Helper auf einem Mac nativ bauen und USB, BLE-only sowie automatischen
+   Failover/Failback mit dem realen Board prüfen.
 
 ## Offene Fragen
 
@@ -113,6 +120,26 @@ Firmware-Watchdog sind praktisch bestätigt.
 Neue Arbeitseinheiten hier kurz mit Datum, Ergebnis und nächstem Schritt
 ergänzen. Ausführliche technische Beschreibungen gehören in das jeweils
 passende Dokument, nicht in diese Datei.
+
+### 2026-11-17 – Host auf macOS portiert
+
+- **Branch:** `feature/macos-host` trennt die Mac-Portierung vom bisherigen
+  Windows-Stand.
+- **Implementierung:** Plattformneutrale Node-Skripte ersetzen die
+  PowerShell-Abhängigkeit beim BLE-Build und Bluetooth-only-Start. Der Host
+  wählt auf macOS das erweiterungslose native Helper-Binary und auf Windows
+  weiterhin die `.exe`.
+- **BLE:** Derselbe gefilterte Go-GATT-Client verwendet auf macOS das von
+  `tinygo.org/x/bluetooth` bereitgestellte CoreBluetooth-Backend. Servicefilter,
+  `HELLO 1`, Vollsynchronisation, Keepalive und Reconnect bleiben unverändert.
+- **Sicherheit:** USB-Kandidaten werden weiterhin per VID/PID vorgefiltert und
+  danach per Handshake verifiziert; BLE weiterhin per Name, Service und
+  Handshake. Es werden keine festen Ports oder BLE-Adressen eingeführt.
+- **Automatisierung:** 44 Hosttests, Typecheck, TypeScript-Build, Go-Test und
+  nativer Windows-Build des neuen plattformneutralen Buildskripts sind
+  erfolgreich.
+- **Offen:** CoreBluetooth kann nicht unter Windows für macOS gebaut oder real
+  getestet werden. Native Builds und Hardwaretests müssen auf einem Mac folgen.
 
 ### 2026-11-12 – PoC-Host ohne USB
 

@@ -6,16 +6,17 @@ Bluetooth LE an das Statuslicht.
 
 ## Voraussetzungen
 
-- Windows
+- Windows 10/11 oder macOS
 - Node.js 22 oder neuer
 - OpenCode V2 mit lokalem Background Service
 - Pro-Micro-nRF52840-Board mit der Firmware aus `../firmware/`
-- für den Bau des Windows-BLE-Helpers: Go 1.25 oder neuer
+- für den Bau des BLE-Helpers: Go 1.25 oder neuer
+- unter macOS zusätzlich Xcode Command Line Tools (`xcode-select --install`)
 
 ## Installation
 
-```powershell
-cd .\host
+```sh
+cd host
 npm install
 ```
 
@@ -23,13 +24,13 @@ npm install
 
 Während der Entwicklung:
 
-```powershell
+```sh
 npm run dev
 ```
 
 Kompilierte Variante:
 
-```powershell
+```sh
 npm run build
 npm start
 ```
@@ -56,6 +57,12 @@ Die Dauer des Zustands `FINISHED` beträgt standardmäßig fünf Sekunden und is
 fest auf maximal fünf Sekunden begrenzt. Für einen kürzeren Test kann sie über
 eine Umgebungsvariable geändert werden:
 
+```sh
+OPENCODE_STATUS_FINISHED_HOLD_MS=2000 npm run dev
+```
+
+Unter PowerShell bleibt alternativ die Windows-Syntax möglich:
+
 ```powershell
 $env:OPENCODE_STATUS_FINISHED_HOLD_MS = "2000"
 npm run dev
@@ -65,9 +72,8 @@ Zusätzlich gleicht die Anwendung den Zustand standardmäßig alle fünf Sekunde
 mit der OpenCode-API ab. Dadurch werden Änderungen erkannt, für die kein
 Live-Event gesendet wurde. Das Intervall lässt sich für Tests anpassen:
 
-```powershell
-$env:OPENCODE_STATUS_POLL_INTERVAL_MS = "2000"
-npm run dev
+```sh
+OPENCODE_STATUS_POLL_INTERVAL_MS=2000 npm run dev
 ```
 
 Bei einer erkannten Abweichung entstehen synthetische Events:
@@ -83,9 +89,8 @@ wenn sie nicht mehr im aktiven Snapshot auftauchen.
 
 Die LED-Helligkeit liegt standardmäßig bei 128 von 255:
 
-```powershell
-$env:OPENCODE_STATUS_BRIGHTNESS = "96"
-npm run dev
+```sh
+OPENCODE_STATUS_BRIGHTNESS=96 npm run dev
 ```
 
 Standardmäßig hält die Bridge USB und Bluetooth gleichzeitig verbunden. USB ist
@@ -93,7 +98,7 @@ der bevorzugte aktive Transport; Bluetooth bleibt als überwachtes Backup im
 Standby. Voraussetzung ist, dass der BLE-Helper nach Quelländerungen einmal
 gebaut wurde:
 
-```powershell
+```sh
 npm run build:bluetooth
 npm run dev
 ```
@@ -101,12 +106,9 @@ npm run dev
 Zur Laufzeit benötigt der bereits gebaute Helper kein Go. Für Diagnose und
 isolierte Tests kann ein einzelner Transport gewählt werden:
 
-```powershell
-$env:OPENCODE_STATUS_TRANSPORT = "usb"
-npm run dev
-
-$env:OPENCODE_STATUS_TRANSPORT = "bluetooth"
-npm run dev
+```sh
+OPENCODE_STATUS_TRANSPORT=usb npm run dev
+OPENCODE_STATUS_TRANSPORT=bluetooth npm run dev
 ```
 
 Erlaubt sind `both` (USB-Primary mit BLE-Backup, Standard), `usb` und
@@ -130,16 +132,23 @@ SET 0 <vollständiger Gesamtstatus>
 SYNC_COMPLETE
 ```
 
-Die COM-Port-Nummer wird nie fest codiert. Alle fünf Sekunden prüft
+Der Serialport-Pfad (zum Beispiel `COM6` oder `/dev/cu.usbmodem...`) wird nie
+fest codiert. Alle fünf Sekunden prüft
 `PING`/`PONG` die Verbindung. Nach einem Fehler oder Abziehen schließt die
 Bridge die Verbindung, sucht erneut und überträgt nach dem Reconnect immer den
 vollständigen aktuellen Hoststatus.
 
 ## Bluetooth-Geräteerkennung
 
-Der kleine Go-Helper unter `ble-helper/` verwendet die normalen Windows-WinRT-
-Bluetooth-APIs. Ein Austausch des Bluetooth-Treibers und eine manuelle Kopplung
-in den Windows-Einstellungen sind nicht erforderlich.
+Der kleine Go-Helper unter `ble-helper/` verwendet unter Windows WinRT und unter
+macOS CoreBluetooth. Ein Austausch des Bluetooth-Treibers und eine manuelle
+Kopplung sind nicht erforderlich. Der Helper muss auf dem jeweiligen
+Betriebssystem lokal gebaut werden; ein Cross-Build von Windows nach macOS wird
+von der CoreBluetooth-Bibliothek nicht unterstützt.
+
+Beim ersten BLE-Start fragt macOS gegebenenfalls nach Bluetooth-Zugriff für das
+Terminal oder die verwendete Entwicklungsumgebung. Dieser Zugriff muss unter
+**Systemeinstellungen → Datenschutz & Sicherheit → Bluetooth** erlaubt sein.
 
 Die Suche filtert zuerst auf den Namen `OCStatus` und den projektspezifischen
 128-Bit-GATT-Dienst. Die BLE-Adresse wird nur protokolliert und nicht fest
@@ -157,7 +166,7 @@ kehrt in den Standby zurück.
 
 ## Qualitätsprüfungen
 
-```powershell
+```sh
 npm test
 npm run check
 npm run build
@@ -174,9 +183,9 @@ src/ports/                Schnittstellen für Eingabe und Ausgabe
 src/application/          Reconnect- und Ablaufsteuerung
 src/adapters/opencode/    OpenCode SDK, Snapshot und Event-Normalisierung
 src/adapters/console/     Datenschutzarme JSON-Ausgabe
-src/adapters/serial/      Windows-Serialport und zeilenbasierte Antworten
-src/adapters/bluetooth/   Start und Überwachung des Windows-BLE-Helpers
-ble-helper/               Go/WinRT-GATT-Client für den eigenen Statusdienst
+src/adapters/serial/      Plattformübergreifender Serialport und Zeilenprotokoll
+src/adapters/bluetooth/   Start und Überwachung des nativen BLE-Helpers
+ble-helper/               Go-GATT-Client über WinRT bzw. CoreBluetooth
 test/                     Unit- und Anwendungstests mit Fakes
 ```
 

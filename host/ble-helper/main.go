@@ -60,7 +60,7 @@ func main() {
 func run(scanTimeout time.Duration, encoder *json.Encoder) error {
 	adapter := bluetooth.DefaultAdapter
 	if err := adapter.Enable(); err != nil {
-		return fmt.Errorf("enable Windows Bluetooth: %w", err)
+		return fmt.Errorf("enable Bluetooth adapter: %w", err)
 	}
 
 	connectionStates := make(chan bluetooth.ConnectionState, 4)

@@ -1,6 +1,6 @@
 # OpenCode Status Light
 
-Eine externe LED-Statusanzeige für OpenCode-Sessions unter Windows. Ein lokaler
+Eine externe LED-Statusanzeige für OpenCode-Sessions unter Windows und macOS. Ein lokaler
 Host-Dienst beobachtet OpenCode, erkennt den Mikrocontroller automatisch über
 USB-Serial oder Bluetooth LE und überträgt den aktuellen Zustand an dessen LEDs.
 
@@ -11,7 +11,7 @@ fertig sind, einen Fehler melden oder ob keine Session aktiv ist.
 
 ## Geplante Komponenten
 
-- **Windows Host Bridge:** liest OpenCode-Events und verwaltet den Gesamtzustand
+- **Windows/macOS Host Bridge:** liest OpenCode-Events und verwaltet den Gesamtzustand
 - **USB/BLE-Verbindung:** automatische Geräteerkennung, Handshake und Reconnect
 - **Mikrocontroller-Firmware:** steuert zunächst die Board-LED, später externe LEDs
 - **Dokumentation:** hält Features, Architektur, Entscheidungen und Fortschritt fest
@@ -33,7 +33,9 @@ USB als aktiven Primary und Bluetooth als verbundenes Backup im Standby. Jede
 Verbindung wird anhand von Metadaten bzw. BLE-Service und zusätzlich per
 Protokoll-Handshake verifiziert. Reale End-to-End-Läufe sowie kontrollierter
 Failover zu BLE, Failback zu USB, USB-Reconnect und Firmware-Watchdog sind
-bestätigt. Die Versorgungsspannung lässt sich ohne Zusatzverdrahtung über den
+bestätigt. Der Host unterstützt auf macOS dieselbe Zustandslogik, USB-Erkennung
+und BLE-Anbindung über CoreBluetooth; der reale Hardwaretest auf einem Mac steht
+noch aus. Die Versorgungsspannung lässt sich ohne Zusatzverdrahtung über den
 internen nRF52840-Kanal `VDDH/5` messen; die board-spezifische Kalibrierung wurde
 im Akkubetrieb über BLE gegen ein Multimeter bestätigt. Der geplante RGB-Start-,
 Akku- und Verbindungsablauf steuert das erste extern verdrahtete RGB-Auge per
@@ -43,17 +45,17 @@ verwendet RGB-Verläufe und nicht blockierende Blink- bzw. Pulsmuster.
 ## Repository-Struktur
 
 ```text
-host/       Windows Host Bridge und automatisierte Tests
+host/       Windows/macOS Host Bridge und automatisierte Tests
 firmware/   Mikrocontroller-Firmware und Hardware-Testwerkzeuge
 docs/       Planung und Projektdokumentation
 ```
 
 ## Vorgesehener Technik-Stack
 
-- TypeScript/Node.js für die Windows Host Bridge
+- TypeScript/Node.js für die Windows/macOS Host Bridge
 - `@opencode/client` für OpenCode API und Event-Stream
 - `serialport` für USB-Serial
-- Go-Bluetooth/WinRT-Helper für Bluetooth LE unter Windows
+- Go-Bluetooth-Helper mit WinRT unter Windows und CoreBluetooth unter macOS
 - nice!nano-v2-kompatibles Pro-Micro-nRF52840-Board
 - TinyGo für die nRF52840-Firmware
 - zunächst Board-LED, später zwei unabhängig verdrahtete RGB-LEDs als Augen

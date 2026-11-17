@@ -3,16 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Windows host bridge for the OpenCode status light",
+  "description": "Windows and macOS host bridge for the OpenCode status light",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "build:bluetooth": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/Build-BluetoothHelper.ps1",
+    "build:bluetooth": "node tools/build-bluetooth-helper.mjs",
     "check": "tsc -p tsconfig.json",
     "dev": "tsx src/main.ts",
-    "dev:bluetooth": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/Start-Bluetooth.ps1",
+    "dev:bluetooth": "node tools/start-bluetooth.mjs",
     "start": "node dist/main.js",
     "test": "tsx --test test/**/*.test.ts"
   },

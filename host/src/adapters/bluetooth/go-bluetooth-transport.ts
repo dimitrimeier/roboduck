@@ -9,10 +9,6 @@ import type {
 } from "../../ports/bluetooth-transport.js";
 import type { StatusDeviceRequestOptions } from "../../ports/status-device.js";
 
-const DEFAULT_HELPER_PATH = fileURLToPath(
-  new URL("../../../bin/opencode-status-ble.exe", import.meta.url),
-);
-
 interface GoBluetoothTransportOptions {
   readonly executablePath?: string;
 }
@@ -36,7 +32,7 @@ export class GoBluetoothTransport implements BluetoothTransport {
   readonly #executablePath: string;
 
   constructor(options: GoBluetoothTransportOptions = {}) {
-    this.#executablePath = options.executablePath ?? DEFAULT_HELPER_PATH;
+    this.#executablePath = options.executablePath ?? defaultBluetoothHelperPath();
   }
 
   async connect(options: BluetoothConnectOptions): Promise<BluetoothConnection | undefined> {
@@ -62,6 +58,15 @@ export class GoBluetoothTransport implements BluetoothTransport {
       throw error;
     }
   }
+}
+
+export function defaultBluetoothHelperPath(platform: NodeJS.Platform = process.platform): string {
+  if (platform !== "win32" && platform !== "darwin") {
+    throw new Error(`Bluetooth transport is not supported on ${platform}`);
+  }
+
+  const executable = platform === "win32" ? "opencode-status-ble.exe" : "opencode-status-ble";
+  return fileURLToPath(new URL(`../../../bin/${executable}`, import.meta.url));
 }
 
 class GoBluetoothConnection implements BluetoothConnection {
