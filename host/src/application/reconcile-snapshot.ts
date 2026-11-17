@@ -19,9 +19,10 @@ export function reconcileSnapshot(
       continue;
     }
 
-    // A successful execution remains visible for its configured FINISHED hold
-    // period. Once the store timer changes it to IDLE, the next poll removes it.
-    if (session.status === "finished") {
+    // A successful execution remains visible for its configured FINISHED hold.
+    // Afterwards, retain the known session as IDLE even if the active-session
+    // snapshot omits it. Explicit deletion/archive events still remove it.
+    if (session.status === "finished" || session.status === "idle") {
       continue;
     }
 

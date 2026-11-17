@@ -30,6 +30,8 @@ const SYSTEM_CLOCK: Clock = {
   now: () => Date.now(),
 };
 
+export const MAX_FINISHED_HOLD_MS = 5_000;
+
 const STATUS_PRIORITY: Readonly<Record<DisplayStatus, number>> = {
   off: 0,
   idle: 1,
@@ -45,12 +47,13 @@ export class StatusStore {
   readonly #clock: Clock;
 
   constructor(options: StatusStoreOptions = {}) {
-    this.#finishedHoldMs = options.finishedHoldMs ?? 60_000;
+    const configuredFinishedHoldMs = options.finishedHoldMs ?? MAX_FINISHED_HOLD_MS;
     this.#clock = options.clock ?? SYSTEM_CLOCK;
 
-    if (!Number.isFinite(this.#finishedHoldMs) || this.#finishedHoldMs < 0) {
+    if (!Number.isFinite(configuredFinishedHoldMs) || configuredFinishedHoldMs < 0) {
       throw new RangeError("finishedHoldMs must be a non-negative number");
     }
+    this.#finishedHoldMs = Math.min(configuredFinishedHoldMs, MAX_FINISHED_HOLD_MS);
   }
 
   replaceSnapshot(snapshot: SourceSnapshot): void {

@@ -14,7 +14,7 @@ import { ConsoleSerialObserver } from "./adapters/console/console-serial-observe
 import { ConsoleReporter } from "./adapters/console/console-reporter.js";
 import { OpenCodeStatusSource } from "./adapters/opencode/open-code-source.js";
 import { NodeSerialTransport } from "./adapters/serial/node-serial-transport.js";
-import { StatusStore } from "./core/status-store.js";
+import { MAX_FINISHED_HOLD_MS, StatusStore } from "./core/status-store.js";
 import type { StatusReporter } from "./ports/status-reporter.js";
 
 interface RunnableStatusOutput extends StatusReporter {
@@ -28,7 +28,7 @@ process.once("SIGTERM", () => abortController.abort());
 
 const finishedHoldMs = readNonNegativeNumber(
   process.env["OPENCODE_STATUS_FINISHED_HOLD_MS"],
-  60_000,
+  MAX_FINISHED_HOLD_MS,
 );
 const pollIntervalMs = readPositiveNumber(
   process.env["OPENCODE_STATUS_POLL_INTERVAL_MS"],

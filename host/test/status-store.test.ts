@@ -81,6 +81,17 @@ describe("StatusStore", () => {
     assert.equal(sessionStatus(store), "idle");
   });
 
+  it("caps the finished hold period at five seconds", () => {
+    const clock = new FakeClock(1_000);
+    const store = new StatusStore({ clock, finishedHoldMs: 60_000 });
+
+    store.apply(event("session.execution.succeeded", clock.value));
+
+    assert.equal(store.tick(5_999), false);
+    assert.equal(store.tick(6_000), true);
+    assert.equal(sessionStatus(store), "idle");
+  });
+
   it("keeps asking until every pending request is closed", () => {
     const store = new StatusStore();
     store.replaceSnapshot(snapshot([]));

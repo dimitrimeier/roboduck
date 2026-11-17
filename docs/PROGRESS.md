@@ -1,6 +1,6 @@
 # Fortschritt
 
-Zuletzt aktualisiert: 2026-11-16
+Zuletzt aktualisiert: 2026-11-17
 
 ## Aktueller Status
 
@@ -49,8 +49,8 @@ Firmware-Watchdog sind praktisch bestätigt.
   `PING`/`PONG` und Reconnect implementiert.
 - [x] OpenCode-Gesamtstatus in einem realen End-to-End-Lauf an das Board
   übertragen.
-- [x] Firmware-Watchdog setzt einen veralteten Status nach 15 Sekunden ohne
-  Hostaktivität auf `OFF`.
+- [x] Firmware-Watchdog verwirft einen veralteten Status nach 15 Sekunden ohne
+  Hostaktivität; seit Firmware 0.4.0 folgt das blaue Verbindungspulsieren.
 - [x] Board im laufenden Betrieb abgezogen, automatisch wiedererkannt und mit
   dem aktuellen Hoststatus vollständig resynchronisiert.
 - [x] Firmware 0.3.0 mit eigenem BLE-GATT-Dienst und weiterhin funktionsfähigem
@@ -69,6 +69,22 @@ Firmware-Watchdog sind praktisch bestätigt.
   Firmware 0.3.3 hinterlegt.
 - [x] Start-, Akku- und Verbindungssequenz für zwei zunächst gespiegelte
   RGB-Augen in Firmware 0.4.0 simuliert und per `DISPLAY` diagnostizierbar gemacht.
+- [x] Nicht blockierenden `DISPLAY_DEMO`-Ablauf und sicheres Windows-Logskript
+  zum Prüfen der RGB-Phasen vor der Verdrahtung ergänzt.
+- [x] Erstes externes Common-Cathode-RGB-Auge auf `D104`, `D106` und `D011`
+  in Firmware 0.5.0 über Hardware-PWM angebunden.
+- [x] Physische LED-Ausgabe in Firmware 0.5.1 global auf 80 Prozent begrenzt.
+- [x] Initialisierung und RGB-Statusmuster in Firmware 0.6.0 überarbeitet,
+  interne rote LED deaktiviert und bekannte Idle-Sessions dauerhaft erhalten.
+- [x] Maximale relative Helligkeit von `RUNNING` in Firmware 0.6.1 auf
+  15 Prozent reduziert.
+- [x] Globale physische Ausgangsgrenze in Firmware 0.6.2 von 80 auf etwa
+  65 Prozent reduziert.
+- [x] Initialen Rot-Gelb-Grün-Funktionstest in Firmware 0.6.3 als weichen
+  2,2-sekündigen Farbverlauf umgesetzt.
+- [x] `RUNNING`-Verlauf in Firmware 0.6.4 vollständig auf Mischfarben umgestellt.
+- [x] Idle-Doppelblinken in Firmware 0.6.5 auf 20 Prozent beim ersten und volle
+  global begrenzte Helligkeit beim zweiten Blinker gestuft.
 
 ## Als Nächstes
 
@@ -79,18 +95,16 @@ Firmware-Watchdog sind praktisch bestätigt.
 4. Wechselnde COM-Port-Nummer und einen real blockierten Port testen.
 5. PoC 2 mit zusätzlichen Grenz- und Reihenfolgetests abschließen.
 6. Mindestens zweistündigen Primary/Backup-Langzeittest durchführen.
-7. Durchlassspannung und gewünschten Strom der zwei Common-Cathode-RGB-LEDs
-   bestimmen, danach sechs Vorwiderstände, PWM-Pins und gegebenenfalls
-   Treiberstufen festlegen.
+7. Durchlassspannungen der zwei Common-Cathode-RGB-LEDs bestimmen, danach für
+   10 mA je Kanal sechs Vorwiderstände, PWM-Pins und Source-Treiber festlegen.
 
 ## Offene Fragen
 
-- Welche Durchlassspannungen und Nennströme haben die sechs Farbkanäle der zwei
+- Welche Durchlassspannungen haben die sechs Farbkanäle der zwei
   Common-Cathode-RGB-LEDs?
-- Welche sechs GPIO-Pins, Vorwiderstände und gegebenenfalls Source-Treiber werden
-  für die später unabhängig steuerbaren Augen verwendet?
+- Welche Versorgung, sechs GPIO-Pins, Vorwiderstände und Source-Treiber werden
+  für 10 mA je Kanal und die später unabhängig steuerbaren Augen verwendet?
 - Eine Gesamtanzeige oder eine LED pro Session im MVP?
-- Wie lange soll `FINISHED` sichtbar bleiben?
 - Sollen Berechtigungsanfragen eine eigene Farbe statt `ASKING` erhalten?
 - Soll BLE später Kopplung und verschlüsselte Characteristics verlangen?
 
@@ -306,13 +320,59 @@ passende Dokument, nicht in diese Datei.
   USB erkannt und Gelb als „Akkustand unbekannt“ verwendet, weil `VDDH/5` dann
   nicht die Akkuspannung sieht.
 - **Diagnose:** `DISPLAY` liefert Phase, Akkustufe, Startmesswert und simuliertes
-  RGB. Die einfarbige Board-LED zeigt davon nur die Helligkeit.
+  RGB. Die einfarbige Board-LED zeigt davon nur die Helligkeit. Firmware 0.4.1
+  ergänzt `DISPLAY_DEMO` und `Watch-DisplayPhases.ps1`, um die komplette Sequenz
+  mit Zeitstempeln vor der Verdrahtung zu protokollieren.
 - **Verbindung:** Ein gültiger `HELLO 1`-Handshake über USB oder BLE bestätigt
   die Verbindung. Nach 15 Sekunden ohne Hostaktivität kehrt die Anzeige in die
   blaue Suchphase zurück, statt einen veralteten Status zu zeigen.
 - **Hardwareplanung:** Zwei Common-Cathode-RGB-LEDs werden vorerst gespiegelt,
   aber für spätere unabhängige Steuerung mit sechs getrennten PWM-Kanälen und
-  sechs getrennten Vorwiderständen vorgesehen.
+  sechs getrennten Vorwiderständen vorgesehen. Die vorläufige maximale
+  Helligkeit ist auf 10 mA je Farbkanal beziehungsweise 60 mA LED-Gesamtstrom
+  bei gleichzeitigem Weiß festgelegt; die GPIOs sollen nur Treiber ansteuern.
 - **Validierung:** TinyGo-Build für `nicenano` erfolgreich. Der reale visuelle
   RGB-Test bleibt bis zur sicheren Festlegung von Strom, Widerständen und Pins
   offen.
+- **Realer Diagnoselauf:** Firmware 0.4.1 wurde auf das Board geflasht und über
+  COM6 per Handshake bestätigt. `Watch-DisplayPhases.ps1` protokollierte den
+  vollständigen Ablauf: RGB-Test, drei gelbe Akku-Unbekannt-Blinker bei 4,836 V
+  USB-Versorgung, blaues Pulsieren, drei kurze blaue Blinker und Statusphase.
+- **Erstes externes RGB-Auge:** Firmware 0.5.0 wurde gebaut, geflasht und auf
+  COM6 per Handshake bestätigt. Der Diagnoseablauf meldete bei 4,826 V
+  USB-Versorgung alle erwarteten RGB-Werte. Der Nutzer bestätigte Rot, Gelb,
+  Grün, die gelbe Akku-Unbekannt-Anzeige, blaues Pulsieren und die drei kurzen
+  blauen Verbindungsblinker visuell als korrekt.
+- **Globale Dimmung:** Firmware 0.5.1 begrenzt jede physische PWM-Ausgabe auf
+  80 Prozent des vorherigen Maximums. Build, Flash, vollständiger Diagnoseablauf
+  und anschließender USB-Handshake der Host Bridge mit Firmware 0.5.1 waren
+  erfolgreich.
+- **Anzeigeablauf 0.6.0:** Startpausen, 1,5-sekündige dauerhafte Akkuanzeige,
+  RGB-Statusmuster und deaktivierte interne rote LED implementiert. Die
+  Snapshot-Abstimmung erhält bekannte Idle-Sessions, damit das Doppelblinkmuster
+  dauerhaft sichtbar bleibt. TinyGo-Build, TypeScript-Check und -Build sowie 40
+  Hosttests waren erfolgreich. Firmware 0.6.0 wurde real geflasht; Handshake,
+  Initialisierungstiming und vollständiger Status-Protokolltest auf COM6 waren
+  erfolgreich. Die visuelle Bestätigung der neuen Statusfarben steht noch aus.
+- **FINISHED-Haltezeit:** Standard und Obergrenze auf fünf Sekunden gesetzt.
+  Kürzere Werte bleiben über `OPENCODE_STATUS_FINISHED_HOLD_MS` möglich; höhere
+  Werte werden auf fünf Sekunden begrenzt.
+- **RUNNING-Helligkeit:** Der damalige Rot-Blau-Grün-Verlauf ist in Firmware 0.6.1 auf
+  maximal 15 Prozent relativer Helligkeit begrenzt. Andere Zustände blieben bei
+  dieser Änderung unverändert.
+- **Globale Dimmung 0.6.2:** Die feste physische Ausgangsgrenze wurde von 204
+  auf 166 von 255 Stufen reduziert, entsprechend rund 65 Prozent. Die relative
+  15-Prozent-Grenze des `RUNNING`-Verlaufs bleibt zusätzlich aktiv.
+- **Weicher Startverlauf 0.6.3:** Die bisherigen dunklen Zwischenpausen zwischen
+  Rot, Gelb und Grün wurden durch lineare RGB-Übergänge ersetzt. Die gesamte
+  Testphase bleibt 2,2 Sekunden lang; alle nachfolgenden Phasen behalten ihr
+  Timing. Firmware 0.6.3 wurde real geflasht; der zeitgestempelte Diagnoselauf
+  bestätigte den lückenlosen Verlauf und die unveränderten Folgephasen auf COM6.
+- **RUNNING-Mischfarben 0.6.4:** Reine rote, blaue und grüne Wendepunkte wurden
+  durch warmes Pink, Violett und Türkisgrün ersetzt. Zyklusdauer und relative
+  15-Prozent-Helligkeitsgrenze bleiben unverändert.
+- **Idle-Helligkeitsstufe 0.6.5:** Der erste grüne Blinker nutzt 20 Prozent
+  relative Helligkeit, der zweite die volle durch Hostwert und globale Grenze
+  skalierte Helligkeit. Das bisherige Timing bleibt unverändert. Der Nutzer hat
+  den aktuellen Gesamtstand auf der realen RGB-LED visuell geprüft und als gut
+  funktionierend bestätigt.

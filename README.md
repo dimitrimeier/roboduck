@@ -27,7 +27,7 @@ fertig sind, einen Fehler melden oder ob keine Session aktiv ist.
 
 ## Aktueller Stand
 
-Firmware 0.3.3 läuft auf einem nice!nano-v2-kompatiblen Pro-Micro-nRF52840-
+Firmware 0.6.5 läuft auf einem nice!nano-v2-kompatiblen Pro-Micro-nRF52840-
 Board und bietet USB-CDC sowie Bluetooth LE. Die Host Bridge hält standardmäßig
 USB als aktiven Primary und Bluetooth als verbundenes Backup im Standby. Jede
 Verbindung wird anhand von Metadaten bzw. BLE-Service und zusätzlich per
@@ -35,7 +35,10 @@ Protokoll-Handshake verifiziert. Reale End-to-End-Läufe sowie kontrollierter
 Failover zu BLE, Failback zu USB, USB-Reconnect und Firmware-Watchdog sind
 bestätigt. Die Versorgungsspannung lässt sich ohne Zusatzverdrahtung über den
 internen nRF52840-Kanal `VDDH/5` messen; die board-spezifische Kalibrierung wurde
-im Akkubetrieb über BLE gegen ein Multimeter bestätigt.
+im Akkubetrieb über BLE gegen ein Multimeter bestätigt. Der geplante RGB-Start-,
+Akku- und Verbindungsablauf steuert das erste extern verdrahtete RGB-Auge per
+Hardware-PWM. Die interne rote Board-LED ist deaktiviert. Die Statusanzeige
+verwendet RGB-Verläufe und nicht blockierende Blink- bzw. Pulsmuster.
 
 ## Repository-Struktur
 
