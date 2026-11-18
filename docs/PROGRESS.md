@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-11-17
+Last updated: 2026-11-18
 
 ## Current status
 
@@ -18,9 +18,11 @@ been validated on Windows. macOS support uses `serialport` and the same Go BLE
 helper through CoreBluetooth; native macOS build, automated tests, and physical
 hardware validation remain pending.
 
-Firmware 0.6.5 drives the first external RGB eye using hardware PWM. The startup
-self-test, supply indication, connection sequence, mixed-color running fade,
-asking flashes, finished pulse, and idle double flash have been visually tested.
+Firmware 0.7.0 drives two external RGB eyes through six separate hardware PWM
+channels. They currently mirror one logical display. The startup self-test,
+supply indication, connection sequence, mixed-color running fade, asking
+flashes, finished pulse, and idle double flash have been visually tested. The
+user confirmed identical startup, supply, and connection output on both eyes.
 
 ## Completed
 
@@ -48,6 +50,9 @@ asking flashes, finished pulse, and idle double flash have been visually tested.
 - [x] Expanded ignore rules and added public contribution/security guidance.
 - [x] Added GitHub Actions checks for the host and BLE helper.
 - [x] Scanned tracked content for common credentials and local absolute paths.
+- [x] Reserved `D115`, `D113`, and `D111` on `PWM1` for the independently wired
+  second RGB eye.
+- [x] Added mirrored second-eye output through `PWM1` in firmware 0.7.0.
 
 ## Next steps
 
@@ -76,6 +81,17 @@ asking flashes, finished pulse, and idle double flash have been visually tested.
 
 Keep new entries brief. Detailed technical behavior belongs in the relevant
 document.
+
+### 2026-11-18 — Reserved second RGB eye wiring
+
+- Assigned `D115`/`P1.15` to red, `D113`/`P1.13` to green, and `D111`/`P1.11`
+  to blue, with the common cathode on ground.
+- Kept three separate resistors and reserved `PWM1` so both eyes remain
+  independently controllable.
+- The user soldered the second common-cathode RGB LED with matching resistors.
+- Firmware 0.7.0 mirrors the first eye on `PWM1`; build, flash, handshake, full
+  display diagnostic, and visual validation of identical output on both eyes
+  succeeded on the physical board.
 
 ### 2026-11-17 — Prepared repository for public GitHub hosting
 

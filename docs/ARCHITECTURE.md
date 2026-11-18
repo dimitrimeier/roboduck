@@ -102,7 +102,7 @@ long lines into GATT packets transparently.
 
 ```text
 HOST -> HELLO 1
-MCU  -> DEVICE OPENCODE_STATUS protocol=1 firmware=0.6.5 leds=1
+MCU  -> DEVICE OPENCODE_STATUS protocol=1 firmware=0.7.0 leds=1
 HOST -> RESET_STATE
 MCU  -> OK
 HOST -> BRIGHTNESS 128
@@ -155,10 +155,12 @@ red-yellow-green self-test, battery indication, blue connection pulse, and
 connection confirmation flashes. `DISPLAY` exposes the rendered RGB value for
 diagnostics; `DISPLAY_DEMO` safely replays the phases.
 
-Since firmware 0.5.0, the first common-cathode RGB eye uses hardware PWM on
-`D104`/`P1.04` (red), `D106`/`P1.06` (green), and `D011`/`P0.11` (blue). Its
-cathode is connected to GND. The internal red LED at `P0.15` is disabled. A
-second eye will require separate pins and another PWM peripheral.
+The left common-cathode RGB eye uses `PWM0` on `D104`/`P1.04` (red),
+`D106`/`P1.06` (green), and `D011`/`P0.11` (blue). The right eye uses `PWM1` on
+`D115`/`P1.15` (red), `D113`/`P1.13` (green), and `D111`/`P1.11` (blue). Both
+cathodes connect to GND. Firmware 0.7.0 mirrors one logical RGB value across all
+six channels; the separate peripherals and pins preserve future independent
+control. The internal red LED at `P0.15` is disabled.
 
 Color, configured brightness, and a fixed global output limit are multiplied
 before PWM output. Since firmware 0.6.2 the global limit is approximately 65%.

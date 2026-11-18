@@ -1,10 +1,11 @@
 # Firmware
 
-Firmware 0.6.5 supports USB CDC and Bluetooth LE concurrently on the tested
+Firmware 0.7.0 supports USB CDC and Bluetooth LE concurrently on the tested
 nice!nano-v2-compatible Pro Micro nRF52840 board. Both transports use the same
 status protocol. The programmable internal red LED at `P0.15` is disabled. The
-first external common-cathode RGB eye is driven by three hardware PWM channels;
-a planned second eye is mirrored logically but not yet connected.
+two external common-cathode RGB eyes are driven by six separate hardware PWM
+channels. They currently mirror one logical display while remaining electrically
+independent for future per-eye control.
 
 ## Tested hardware
 
@@ -96,7 +97,7 @@ DISPLAY_DEMO
 Example handshake response:
 
 ```text
-DEVICE OPENCODE_STATUS protocol=1 firmware=0.6.5 leds=1
+DEVICE OPENCODE_STATUS protocol=1 firmware=0.7.0 leds=1
 ```
 
 Commands are limited to 95 bytes excluding the line ending. Unknown or invalid
@@ -191,7 +192,25 @@ Current first-eye prototype:
 | Blue | `D011` / `011` | `P0.11` | GPIO → resistor → blue anode |
 | Common | `GND` | Ground | Common cathode |
 
-The three channels use `PWM0` with a 2 ms period and are not inverted. Firmware
+Current second-eye prototype wiring:
+
+| Channel | Board pin | nRF52840 | Connection |
+|---|---|---|---|
+| Red | `D115` / `115` | `P1.15` | GPIO → resistor → red anode |
+| Green | `D113` / `113` | `P1.13` | GPIO → resistor → green anode |
+| Blue | `D111` / `111` | `P1.11` | GPIO → resistor → blue anode |
+| Common | `GND` | Ground | Common cathode |
+
+These pins use `PWM1`, while the first eye uses `PWM0`. Firmware 0.7.0 writes the
+same logical RGB value to both peripherals, so both eyes mirror each other while
+remaining available for later independent control. The handshake still reports
+`leds=1` because the protocol exposes one logical mirrored display.
+
+All six channels use a 2 ms period and are not inverted. Firmware
 globally limits physical output to 166/255 (about 65%); resistors remain the
 actual current limit. This direct prototype intentionally operates below the
 planned 10 mA and is not the final electrical design.
+
+Both eyes were physically validated with firmware 0.7.0. The user confirmed
+identical startup colors, supply indication, connection pulse, and confirmation
+flashes on the left and right LEDs.

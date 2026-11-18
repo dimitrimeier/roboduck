@@ -151,3 +151,20 @@ limit for `RUNNING` still applies.
   turquoise-green (`48,255,144`) control points for `RUNNING`.
 - Firmware 0.6.5 renders the first idle flash at 20% relative brightness and the
   second at full logical brightness before the global limit.
+
+## 2026-11-18 — Second RGB eye pin assignment
+
+**Status:** Implemented for the reduced-current prototype
+
+The second common-cathode eye uses `D115`/`P1.15` for red, `D113`/`P1.13` for
+green, and `D111`/`P1.11` for blue. Each channel keeps its own resistor and the
+common cathode connects to ground. The three pins are reserved for `PWM1`,
+leaving both eyes electrically independent even while firmware mirrors them.
+
+These pins avoid the battery ADC, VCC control, internal LED, and the board's
+default UART, I²C, SPI, and NFC assignments. Direct GPIO wiring remains only a
+reduced-current prototype; the final 10 mA design still requires source drivers.
+
+Firmware 0.7.0 configures the right eye on `PWM1` and mirrors the logical RGB
+value already sent to the left eye on `PWM0`. The protocol continues to report
+`leds=1` because independent per-eye commands are intentionally deferred.
