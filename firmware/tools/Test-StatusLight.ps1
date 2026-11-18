@@ -71,7 +71,7 @@ try {
     Invoke-StatusCommand $serialPort 'HELLO 1' '^DEVICE OPENCODE_STATUS protocol=1 firmware=[^ ]+ leds=1$'
     Invoke-StatusCommand $serialPort 'BATTERY' '^BATTERY raw=\d+ adc_mv=\d+ source_mv=\d+$'
     Invoke-StatusCommand $serialPort 'SUPPLY' '^SUPPLY raw=\d+ adc_mv=\d+ supply_mv=\d+$'
-    Invoke-StatusCommand $serialPort 'DISPLAY' '^DISPLAY phase=(STARTUP_COLORS|STARTUP_PAUSE|BATTERY|BATTERY_PAUSE|CONNECTING|CONNECTED|STATUS) battery=(LOW|MEDIUM|HIGH|UNKNOWN_USB) supply_mv=\d+ rgb=\d+,\d+,\d+$'
+    Invoke-StatusCommand $serialPort 'DISPLAY' '^DISPLAY phase=(STARTUP_COLORS|STARTUP_PAUSE|BATTERY|BATTERY_PAUSE|CONNECTING|CONNECTED|STATUS) battery=(LOW|MEDIUM|HIGH|UNKNOWN_USB) supply_mv=\d+ left_rgb=\d+,\d+,\d+ right_rgb=\d+,\d+,\d+$'
     Invoke-StatusCommand $serialPort 'HELLO 2' '^ERROR PROTOCOL_VERSION$'
     Invoke-StatusCommand $serialPort 'SET 1 RUNNING' '^ERROR LED_INDEX$'
     Invoke-StatusCommand $serialPort 'SET 0 UNKNOWN' '^ERROR STATE$'

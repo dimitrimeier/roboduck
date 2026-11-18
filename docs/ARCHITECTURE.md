@@ -102,7 +102,7 @@ long lines into GATT packets transparently.
 
 ```text
 HOST -> HELLO 1
-MCU  -> DEVICE OPENCODE_STATUS protocol=1 firmware=0.7.0 leds=1
+MCU  -> DEVICE OPENCODE_STATUS protocol=1 firmware=0.8.5 leds=1
 HOST -> RESET_STATE
 MCU  -> OK
 HOST -> BRIGHTNESS 128
@@ -136,7 +136,7 @@ OK
 PONG
 BATTERY raw=<n> adc_mv=<n> source_mv=<n>
 SUPPLY raw=<n> adc_mv=<n> supply_mv=<n>
-DISPLAY phase=<phase> battery=<level> supply_mv=<n> rgb=<r>,<g>,<b>
+DISPLAY phase=<phase> battery=<level> supply_mv=<n> left_rgb=<r>,<g>,<b> right_rgb=<r>,<g>,<b>
 ERROR <code>
 ```
 
@@ -152,15 +152,22 @@ line length and applies bounded timeouts.
 
 Before rendering host state, the non-blocking firmware renderer runs a
 red-yellow-green self-test, battery indication, blue connection pulse, and
-connection confirmation flashes. `DISPLAY` exposes the rendered RGB value for
+connection confirmation flashes. `DISPLAY` exposes both rendered RGB values for
 diagnostics; `DISPLAY_DEMO` safely replays the phases.
 
 The left common-cathode RGB eye uses `PWM0` on `D104`/`P1.04` (red),
 `D106`/`P1.06` (green), and `D011`/`P0.11` (blue). The right eye uses `PWM1` on
 `D115`/`P1.15` (red), `D113`/`P1.13` (green), and `D111`/`P1.11` (blue). Both
-cathodes connect to GND. Firmware 0.7.0 mirrors one logical RGB value across all
-six channels; the separate peripherals and pins preserve future independent
-control. The internal red LED at `P0.15` is disabled.
+cathodes connect to GND. Firmware 0.8.5 controls per-eye brightness during
+`RUNNING`. During `ASKING`, the first eye shows red for 500 ms while the second
+is off, then the second shows red for 500 ms while the first is off. Other phases
+remain mirrored. The internal red LED at `P0.15` is disabled.
+
+The host remains authoritative for the logical `FINISHED` timeout. Its firmware
+animation contains exactly three 1.6-second green pulses and then reuses the
+normal `IDLE` renderer until the host sends the next state. The idle renderer
+starts with its three-second dark pause. A later host transition from `FINISHED`
+to `IDLE` preserves this already-running pause instead of restarting it.
 
 Color, configured brightness, and a fixed global output limit are multiplied
 before PWM output. Since firmware 0.6.2 the global limit is approximately 65%.

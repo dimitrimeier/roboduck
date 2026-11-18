@@ -77,7 +77,7 @@ try {
     $lastResponse = $null
     while ($watch.ElapsedMilliseconds -lt $DurationMs) {
         $response = Invoke-Request $serialPort 'DISPLAY'
-        if ($response -notmatch '^DISPLAY phase=(STARTUP_COLORS|STARTUP_PAUSE|BATTERY|BATTERY_PAUSE|CONNECTING|CONNECTED|STATUS) battery=(LOW|MEDIUM|HIGH|UNKNOWN_USB) supply_mv=\d+ rgb=\d+,\d+,\d+$') {
+        if ($response -notmatch '^DISPLAY phase=(STARTUP_COLORS|STARTUP_PAUSE|BATTERY|BATTERY_PAUSE|CONNECTING|CONNECTED|STATUS) battery=(LOW|MEDIUM|HIGH|UNKNOWN_USB) supply_mv=\d+ left_rgb=\d+,\d+,\d+ right_rgb=\d+,\d+,\d+$') {
             throw "Unerwartete DISPLAY-Antwort: '$response'"
         }
         if ($response -ne $lastResponse) {
