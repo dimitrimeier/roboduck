@@ -109,11 +109,11 @@ not precise state of charge, and may vary between boards.
 
 **Status:** Provisionally accepted
 
-Two common-cathode RGB LEDs will initially mirror each other but reserve six
-independent channels and six resistors. Final pins, resistors, and source drivers
-depend on measured forward voltage and supply. The intended design point is
-10 mA per channel; GPIOs should drive suitable output stages rather than supply
-the final current directly.
+Two common-cathode RGB LEDs reserve six independent channels and six resistors.
+They normally mirror each other, but status patterns may control them separately.
+Final pins, resistors, and source drivers depend on measured forward voltage and
+supply. The intended design point is 10 mA per channel; GPIOs should drive
+suitable output stages rather than supply the final current directly.
 
 ## 2026-11-17 — Startup, connection, and status display
 
@@ -121,8 +121,9 @@ the final current directly.
 
 Firmware runs an RGB self-test, shows battery level, pulses blue while waiting
 for a handshake, and confirms connection with three blue flashes. Host states
-then use mixed-color running fade, yellow/green asking flashes, green finished
-pulse, and green idle double flash. The internal red board LED remains off.
+then use mixed-color running fade, alternating yellow asking flashes, green
+finished pulse, and green idle double flash. The internal red board LED remains
+off.
 
 ## 2026-11-17 — First RGB eye pin assignment
 
@@ -168,3 +169,60 @@ reduced-current prototype; the final 10 mA design still requires source drivers.
 Firmware 0.7.0 configures the right eye on `PWM1` and mirrors the logical RGB
 value already sent to the left eye on `PWM0`. The protocol continues to report
 `leds=1` because independent per-eye commands are intentionally deferred.
+
+## 2026-11-18 — Alternating ASKING pattern
+
+**Status:** Implemented
+
+Firmware 0.8.0 uses the independent PWM outputs for `ASKING`: the left eye is
+yellow for 500 ms, followed by the right eye for 500 ms, in a continuous cycle.
+Other states remain mirrored. The protocol still exposes one aggregate display,
+while `DISPLAY` reports separate `left_rgb` and `right_rgb` diagnostic values.
+
+## 2026-11-18 — Opposing RUNNING brightness pulse
+
+**Status:** Implemented
+
+Firmware 0.8.1 preserves the existing 4.8-second pink-violet-turquoise color
+gradient and adds an eased brightness transfer between the two eyes over the
+same period. One eye moves from full RUNNING brightness to 20% while the other
+moves from 20% to full brightness, then the direction reverses. The 15% relative
+RUNNING output limit remains in effect before this per-eye modulation.
+
+## 2026-11-18 — Three-pulse FINISHED animation
+
+**Status:** Implemented
+
+Firmware 0.8.2 limits `FINISHED` rendering to exactly three unchanged green
+1.6-second pulses. After 4.8 seconds it delegates to the existing `IDLE`
+double-flash renderer without changing the logical state; the host remains the
+authoritative source and still sends the subsequent state transition.
+
+The idle cycle begins with its three-second dark pause before showing the two
+existing 120 ms green flashes. This ensures the third finished pulse is followed
+by a clear pause rather than an immediate idle flash. When the host subsequently
+sends `IDLE`, firmware preserves the progress of that pause instead of restarting
+the visual cycle.
+
+## 2026-11-18 — Yellow/red ASKING swap
+
+**Status:** Implemented
+
+Firmware 0.8.3 replaces the non-yellow `ASKING` eye with red. For the first
+500 ms the left eye is yellow and the right eye red; for the next 500 ms the
+colors are reversed. This repeats as a continuous one-second cycle.
+
+## 2026-11-18 — Fixed-color alternating ASKING blink
+
+**Status:** Implemented; supersedes the 0.8.3 color swap
+
+Firmware 0.8.4 assigns a fixed color to each eye during `ASKING`: the first eye
+is red and the second eye is yellow. Only one eye is active at a time, alternating
+every 500 ms in a continuous one-second cycle.
+
+## 2026-11-18 — Red-only alternating ASKING blink
+
+**Status:** Implemented; supersedes the 0.8.4 color assignment
+
+Firmware 0.8.5 renders both eyes red during their respective `ASKING` half-cycle.
+Only one eye remains active at a time, alternating every 500 ms.

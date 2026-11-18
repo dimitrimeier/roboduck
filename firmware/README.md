@@ -1,11 +1,11 @@
 # Firmware
 
-Firmware 0.7.0 supports USB CDC and Bluetooth LE concurrently on the tested
+Firmware 0.8.5 supports USB CDC and Bluetooth LE concurrently on the tested
 nice!nano-v2-compatible Pro Micro nRF52840 board. Both transports use the same
 status protocol. The programmable internal red LED at `P0.15` is disabled. The
 two external common-cathode RGB eyes are driven by six separate hardware PWM
-channels. They currently mirror one logical display while remaining electrically
-independent for future per-eye control.
+channels. `RUNNING` and `ASKING` use independent per-eye animations; other
+phases mirror one logical display.
 
 ## Tested hardware
 
@@ -25,10 +25,10 @@ controlled as a normal GPIO status LED. Its blinking is unrelated to Bluetooth.
 | State | Pattern |
 |---|---|
 | `OFF` | Off |
-| `IDLE` | Short green at 20%, short green at full globally limited brightness, then 3 s off |
-| `FINISHED` | Green pulse |
-| `RUNNING` | Warm pink → violet → turquoise-green fade at 15% relative brightness |
-| `ASKING` | Yellow flash followed by green flash |
+| `IDLE` | 3 s off, short green at 20%, then short green at full globally limited brightness |
+| `FINISHED` | Exactly three green pulses, then the unchanged idle double-flash pattern |
+| `RUNNING` | Warm pink → violet → turquoise-green fade with a slow, opposing per-eye brightness pulse |
+| `ASKING` | Alternating red blink: first eye for 500 ms, then second eye for 500 ms |
 | `ERROR` | Fast red blink |
 
 The internal red board LED remains off in every phase.
@@ -97,7 +97,7 @@ DISPLAY_DEMO
 Example handshake response:
 
 ```text
-DEVICE OPENCODE_STATUS protocol=1 firmware=0.7.0 leds=1
+DEVICE OPENCODE_STATUS protocol=1 firmware=0.8.5 leds=1
 ```
 
 Commands are limited to 95 bytes excluding the line ending. Unknown or invalid
@@ -132,7 +132,7 @@ boards and should not be treated as universal calibration.
 protocol output:
 
 ```text
-DISPLAY phase=CONNECTING battery=HIGH supply_mv=4230 rgb=0,0,147
+DISPLAY phase=CONNECTING battery=HIGH supply_mv=4230 left_rgb=0,0,147 right_rgb=0,0,147
 ```
 
 `DISPLAY_DEMO` restarts the diagnostic sequence and keeps connection search
@@ -201,10 +201,11 @@ Current second-eye prototype wiring:
 | Blue | `D111` / `111` | `P1.11` | GPIO → resistor → blue anode |
 | Common | `GND` | Ground | Common cathode |
 
-These pins use `PWM1`, while the first eye uses `PWM0`. Firmware 0.7.0 writes the
-same logical RGB value to both peripherals, so both eyes mirror each other while
-remaining available for later independent control. The handshake still reports
-`leds=1` because the protocol exposes one logical mirrored display.
+These pins use `PWM1`, while the first eye uses `PWM0`. Firmware 0.8.5 controls
+the eyes independently during `RUNNING` and `ASKING`. Other phases use the same
+logical RGB value on both peripherals. The handshake still reports `leds=1`
+because the protocol exposes one aggregate status display rather than per-eye
+commands.
 
 All six channels use a 2 ms period and are not inverted. Firmware
 globally limits physical output to 166/255 (about 65%); resistors remain the

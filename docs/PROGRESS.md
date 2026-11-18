@@ -18,11 +18,15 @@ been validated on Windows. macOS support uses `serialport` and the same Go BLE
 helper through CoreBluetooth; native macOS build, automated tests, and physical
 hardware validation remain pending.
 
-Firmware 0.7.0 drives two external RGB eyes through six separate hardware PWM
-channels. They currently mirror one logical display. The startup self-test,
-supply indication, connection sequence, mixed-color running fade, asking
-flashes, finished pulse, and idle double flash have been visually tested. The
-user confirmed identical startup, supply, and connection output on both eyes.
+Firmware 0.8.5 drives two external RGB eyes through six separate hardware PWM
+channels. `RUNNING` keeps its color gradient while brightness transfers slowly
+between the eyes; `ASKING` alternates red between the eyes every 500 ms, with the
+inactive eye off. Other phases remain
+mirrored. The startup self-test, supply indication, connection sequence, original
+mixed-color running fade, previous asking flashes, finished pulse, and idle
+double flash have been visually tested. `FINISHED` now produces exactly three
+green pulses before reusing the unchanged idle pattern. The new animations still
+require physical validation.
 
 ## Completed
 
@@ -53,6 +57,13 @@ user confirmed identical startup, supply, and connection output on both eyes.
 - [x] Reserved `D115`, `D113`, and `D111` on `PWM1` for the independently wired
   second RGB eye.
 - [x] Added mirrored second-eye output through `PWM1` in firmware 0.7.0.
+- [x] Added alternating yellow per-eye `ASKING` output in firmware 0.8.0.
+- [x] Added an opposing per-eye `RUNNING` brightness pulse in firmware 0.8.1.
+- [x] Limited `FINISHED` to three pulses before the idle pattern in firmware
+  0.8.2.
+- [x] Replaced the green/off `ASKING` counterpart with red in firmware 0.8.3.
+- [x] Corrected `ASKING` to a fixed-color alternating blink in firmware 0.8.4.
+- [x] Changed `ASKING` to alternate red on both eyes in firmware 0.8.5.
 
 ## Next steps
 
@@ -81,6 +92,57 @@ user confirmed identical startup, supply, and connection output on both eyes.
 
 Keep new entries brief. Detailed technical behavior belongs in the relevant
 document.
+
+### 2026-11-18 — Red-only ASKING blink
+
+- Replaced the second eye's yellow/green appearance with red during `ASKING`.
+- Kept the 500 ms alternating blink and switched the inactive eye off.
+- Built and flashed firmware 0.8.5, confirmed its USB handshake, and verified
+  both red/off half-cycles through separate left/right RGB diagnostics.
+- Restarted the host bridge; physical visual validation remains open.
+
+### 2026-11-18 — Corrected ASKING blink
+
+- Assigned red permanently to the first eye and yellow to the second eye during
+  `ASKING`.
+- Alternated the active eye every 500 ms and switched the inactive eye off.
+- Built and flashed firmware 0.8.4, confirmed its USB handshake, and verified
+  both ASKING half-cycles through separate left/right RGB diagnostics.
+- Restarted the host bridge; physical visual validation remains open.
+
+### 2026-11-18 — Yellow/red ASKING swap
+
+- Changed `ASKING` to show yellow on one eye and red on the other.
+- Reversed the two colors every 500 ms without changing the one-second cycle.
+- Built and flashed firmware 0.8.3, confirmed its USB handshake, and restarted
+  the host bridge. Physical visual validation remains open.
+
+### 2026-11-18 — Three-pulse FINISHED animation
+
+- Kept the existing 1.6-second green pulse and limited `FINISHED` to three full
+  cycles.
+- Reused the idle renderer after 4.8 seconds, with its three-second pause first,
+  while leaving logical state ownership with the host.
+- Preserved the running idle pause when the host subsequently confirms the
+  logical transition to `IDLE`.
+- Built and flashed firmware 0.8.2, confirmed its USB handshake, and restarted
+  the host bridge. Physical visual validation remains open.
+
+### 2026-11-18 — Per-eye RUNNING brightness pulse
+
+- Preserved the existing 4.8-second RUNNING color gradient.
+- Added an eased opposing brightness pulse over the same cycle, ranging from 20%
+  to 100% of the existing RUNNING level on each eye.
+- Built and flashed firmware 0.8.1, confirmed its USB handshake, and restarted
+  the host bridge. Physical visual validation remains open.
+
+### 2026-11-18 — Alternating ASKING pattern
+
+- Changed `ASKING` to a continuous one-second cycle: left eye yellow for 500 ms,
+  then right eye yellow for 500 ms.
+- Kept all other display phases mirrored and extended `DISPLAY` diagnostics with
+  separate left/right RGB values.
+- Firmware build validation succeeded; physical visual validation remains open.
 
 ### 2026-11-18 — Reserved second RGB eye wiring
 
