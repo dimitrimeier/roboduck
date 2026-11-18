@@ -9,7 +9,7 @@ import (
 
 const (
 	protocolVersion        = "1"
-	firmwareVersion        = "0.6.5"
+	firmwareVersion        = "0.7.0"
 	lineBufferSize         = 96
 	hostTimeout            = 15 * time.Second
 	batteryADCMax          = 65520
@@ -87,11 +87,15 @@ var (
 )
 
 type ledRenderer struct {
-	pwm          *machine.PWM
-	redChannel   uint8
-	greenChannel uint8
-	blueChannel  uint8
-	brightness   uint8
+	leftPWM           *machine.PWM
+	leftRedChannel    uint8
+	leftGreenChannel  uint8
+	leftBlueChannel   uint8
+	rightPWM          *machine.PWM
+	rightRedChannel   uint8
+	rightGreenChannel uint8
+	rightBlueChannel  uint8
+	brightness        uint8
 }
 
 func newLEDRenderer() (*ledRenderer, error) {
@@ -100,46 +104,69 @@ func newLEDRenderer() (*ledRenderer, error) {
 	machine.LED.Configure(machine.PinConfig{Mode: machine.PinOutput})
 	machine.LED.Set(false)
 
-	pwm := machine.PWM0
-	if err := pwm.Configure(machine.PWMConfig{Period: uint64(2 * time.Millisecond)}); err != nil {
+	leftPWM := machine.PWM0
+	if err := leftPWM.Configure(machine.PWMConfig{Period: uint64(2 * time.Millisecond)}); err != nil {
+		return nil, err
+	}
+	leftRedChannel, err := leftPWM.Channel(machine.D104)
+	if err != nil {
+		return nil, err
+	}
+	leftGreenChannel, err := leftPWM.Channel(machine.D106)
+	if err != nil {
+		return nil, err
+	}
+	leftBlueChannel, err := leftPWM.Channel(machine.D011)
+	if err != nil {
 		return nil, err
 	}
 
-	redChannel, err := pwm.Channel(machine.D104)
+	rightPWM := machine.PWM1
+	if err := rightPWM.Configure(machine.PWMConfig{Period: uint64(2 * time.Millisecond)}); err != nil {
+		return nil, err
+	}
+	rightRedChannel, err := rightPWM.Channel(machine.D115)
 	if err != nil {
 		return nil, err
 	}
-	greenChannel, err := pwm.Channel(machine.D106)
+	rightGreenChannel, err := rightPWM.Channel(machine.D113)
 	if err != nil {
 		return nil, err
 	}
-	blueChannel, err := pwm.Channel(machine.D011)
+	rightBlueChannel, err := rightPWM.Channel(machine.D111)
 	if err != nil {
 		return nil, err
 	}
 
 	renderer := &ledRenderer{
-		pwm:          pwm,
-		redChannel:   redChannel,
-		greenChannel: greenChannel,
-		blueChannel:  blueChannel,
-		brightness:   96,
+		leftPWM:           leftPWM,
+		leftRedChannel:    leftRedChannel,
+		leftGreenChannel:  leftGreenChannel,
+		leftBlueChannel:   leftBlueChannel,
+		rightPWM:          rightPWM,
+		rightRedChannel:   rightRedChannel,
+		rightGreenChannel: rightGreenChannel,
+		rightBlueChannel:  rightBlueChannel,
+		brightness:        96,
 	}
 	renderer.renderRGB(colorOff)
 	return renderer, nil
 }
 
-func (renderer *ledRenderer) write(channel uint8, level uint8) {
-	top := renderer.pwm.Top()
+func (renderer *ledRenderer) write(pwm *machine.PWM, channel uint8, level uint8) {
+	top := pwm.Top()
 	scaled := uint32(uint64(level) * uint64(renderer.brightness) * globalOutputMax * uint64(top) /
 		(255 * 255 * 255))
-	renderer.pwm.Set(channel, scaled)
+	pwm.Set(channel, scaled)
 }
 
 func (renderer *ledRenderer) renderRGB(color rgbColor) {
-	renderer.write(renderer.redChannel, color.red)
-	renderer.write(renderer.greenChannel, color.green)
-	renderer.write(renderer.blueChannel, color.blue)
+	renderer.write(renderer.leftPWM, renderer.leftRedChannel, color.red)
+	renderer.write(renderer.leftPWM, renderer.leftGreenChannel, color.green)
+	renderer.write(renderer.leftPWM, renderer.leftBlueChannel, color.blue)
+	renderer.write(renderer.rightPWM, renderer.rightRedChannel, color.red)
+	renderer.write(renderer.rightPWM, renderer.rightGreenChannel, color.green)
+	renderer.write(renderer.rightPWM, renderer.rightBlueChannel, color.blue)
 }
 
 func renderStatus(state displayState, now time.Duration) rgbColor {

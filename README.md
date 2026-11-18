@@ -30,7 +30,7 @@ ERROR > ASKING > RUNNING > FINISHED > IDLE > OFF
 
 ## Current status
 
-Firmware 0.6.5 runs on a nice!nano-v2-compatible Pro Micro nRF52840 board and
+Firmware 0.7.0 runs on a nice!nano-v2-compatible Pro Micro nRF52840 board and
 supports USB CDC and Bluetooth LE. By default, USB is the active primary
 transport while BLE remains connected as a warm standby. Candidates are
 filtered by USB metadata or the project-specific BLE service and are always
@@ -41,9 +41,10 @@ failover to BLE and failback to USB have been tested on Windows. The host also
 supports macOS through `serialport` and CoreBluetooth, but a native macOS build
 and hardware test are still pending.
 
-The first external common-cathode RGB eye is driven with hardware PWM. Startup,
-battery, connection, and OpenCode states use non-blocking fades, blinks, and
-pulses. The internal red board LED is disabled.
+Two external common-cathode RGB eyes are driven by six separate hardware PWM
+channels and currently mirror one logical display. Startup, battery, connection,
+and OpenCode states use non-blocking fades, blinks, and pulses. The internal red
+board LED is disabled.
 
 ## Quick start
 
