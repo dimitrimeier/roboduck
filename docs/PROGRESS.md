@@ -22,8 +22,11 @@ Firmware 0.8.6 builds on the deployed 0.8.5 two-eye firmware: six independent
 PWM channels, opposing `RUNNING` brightness, alternating red `ASKING`, and
 three-pulse `FINISHED`. It raises the global output cap to 100% and replays the
 blue connection flashes on successful USB/BLE handovers. Host brightness and
-relative animation dimming remain unchanged. The TinyGo build succeeded; firmware upload and physical validation of
-0.8.6 remain pending.
+relative animation dimming remain unchanged. Firmware 0.8.6 was built and
+successfully flashed after USB metadata, application handshake, and UF2
+Board-ID validation. The updated version handshake and USB protocol tests
+passed. Visual animation and real USB/BLE handover validation of 0.8.6 remain
+pending.
 
 An optional native WSL collector now starts as a lingering systemd user service
 and relays reduced session state to the manually started Windows bridge through
@@ -64,6 +67,7 @@ and explicit simultaneous-source priority/recovery tests remain pending.
 - [x] Fixed automatic OpenCode service startup through Windows npm CLI shims.
 - [x] Raised the global firmware PWM cap from 65% to 100%.
 - [x] Added transport-aware blue confirmation after full sync on a new source.
+- [x] Flashed firmware 0.8.6 and verified its version and USB protocol on hardware.
 - [x] Reserved `D115`, `D113`, and `D111` on `PWM1` for the independently wired
   second RGB eye.
 - [x] Added mirrored second-eye output through `PWM1` in firmware 0.7.0.
@@ -104,6 +108,25 @@ and explicit simultaneous-source priority/recovery tests remain pending.
 
 Keep new entries brief. Detailed technical behavior belongs in the relevant
 document.
+
+### 2026-11-25 — Public documentation hygiene
+
+- Kept public documentation focused on project behavior and reproducible
+  validation results.
+- Strengthened contributor and agent guidance for environment-neutral progress
+  entries and troubleshooting examples.
+
+### 2026-11-25 — Successfully flashed firmware 0.8.6
+
+- Built the 184,320-byte UF2 with TinyGo 0.44.0 and Go 1.27.4.
+- Identified the application through USB metadata and its 0.8.5 handshake before
+  requesting the 1200-baud bootloader reset. Verified bootloader VID/PID,
+  matching UF2 disk metadata, and `nRF52840-nicenano` Board-ID before copying.
+- Uploaded successfully while preserving the existing UF2 bootloader.
+- Confirmed the 0.8.6 handshake and passed `Test-StatusLight.ps1`, including
+  diagnostics, invalid-command rejection, all status commands, and keepalive.
+- Did not start the host bridge. Visual animation, maximum-output electrical,
+  and real USB/BLE handover validation remain open.
 
 ### 2026-11-25 — Full brightness range and handover confirmation
 

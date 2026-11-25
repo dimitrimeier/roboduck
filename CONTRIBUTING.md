@@ -30,6 +30,9 @@ go test ./...
 
 - Never commit credentials, local configuration, logs, build output, device
   addresses, or absolute user paths.
+- Keep documentation and commit messages environment-neutral. Do not publish
+  workstation setup, security settings, organization restrictions, or transient
+  local troubleshooting details. Use clearly synthetic examples.
 - Never hard-code a COM port or BLE address.
 - Do not probe unrelated serial devices. Pre-filter by metadata and require the
   protocol handshake before sending commands.

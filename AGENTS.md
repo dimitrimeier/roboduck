@@ -22,3 +22,7 @@ firmware for an external OpenCode status display.
 - Update `docs/PROGRESS.md` after relevant work.
 - Briefly record new architecture decisions in `docs/DECISIONS.md`.
 - Do not commit secrets, build output, or local device configuration.
+- Keep public documentation and commit messages environment-neutral. Record
+  project changes and reproducible validation results, not workstation setup,
+  security settings, organization restrictions, personal paths, or transient
+  local troubleshooting details. Use clearly synthetic examples.
