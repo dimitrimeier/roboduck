@@ -11,7 +11,13 @@ interface LogRecord {
   readonly sessionStatus?: string | undefined;
   readonly retryInMs?: number;
   readonly error?: string;
+  readonly errorCode?: string;
 }
+
+const SYSTEM_ERROR_CODES = new Set([
+  "ENOENT", "EACCES", "EPERM", "EINVAL", "ETIMEDOUT",
+  "ECONNREFUSED", "ECONNRESET", "ECONNABORTED", "ENOTFOUND",
+]);
 
 export class ConsoleReporter implements StatusReporter {
   connected(view: StatusView): void {
@@ -44,15 +50,31 @@ export class ConsoleReporter implements StatusReporter {
   }
 
   disconnected(error: unknown, retryInMs: number): void {
+    const errorCode = systemErrorCode(error);
     this.#write({
       timestamp: new Date().toISOString(),
       kind: "disconnected",
       retryInMs,
       error: error instanceof Error ? error.message : "Unknown error",
+      ...(errorCode === undefined ? {} : { errorCode }),
     });
   }
 
   #write(record: LogRecord): void {
     process.stdout.write(`${JSON.stringify(record)}\n`);
   }
+}
+
+function systemErrorCode(error: unknown): string | undefined {
+  const visited = new Set<Error>();
+  while (error instanceof Error && !visited.has(error)) {
+    visited.add(error);
+    const code = "code" in error ? error.code : undefined;
+    if (typeof code === "string" && SYSTEM_ERROR_CODES.has(code)) {
+      return code;
+    }
+    // Never log cause messages, stderr, paths, or arbitrary error code values.
+    error = error.cause;
+  }
+  return undefined;
 }

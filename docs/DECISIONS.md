@@ -3,6 +3,21 @@
 This file records accepted technical decisions. New entries should include a
 date, status, decision, and rationale.
 
+## 2026-11-23 — Windows-compatible automatic OpenCode service startup
+
+**Status:** Accepted
+
+Keep `Service.ensure()` as the hardware bridge's service lifecycle entrypoint.
+Override only its Windows launch command with `ComSpec` (falling back to
+`cmd.exe`) and `/d /s /c` followed by the fixed `opencode serve --service` command.
+Do not interpolate user input or hard-code installation paths. Other platforms
+retain the SDK default; the WSL collector still only discovers existing services.
+
+**Rationale:** Node's direct process launch cannot resolve the npm-installed
+Windows `.cmd` shim, while the command interpreter can. This preserves automatic
+startup, SDK discovery/authentication, and healthy-service reuse without adding
+a separate autostart service or requiring the user to start OpenCode first.
+
 ## 2026-11-17 — WSL collector with a local status-file relay
 
 **Status:** Accepted

@@ -5,6 +5,7 @@ import type { PendingAttention, SourceSnapshot, StatusEvent } from "../../core/m
 import type { StatusConnection, StatusSource } from "../../ports/status-source.js";
 import { AsyncQueue } from "./async-queue.js";
 import { normalizeOpenCodeEvent } from "./normalize-event.js";
+import { openCodeServiceOptions } from "./service-options.js";
 
 const OBSERVED_EVENT_TYPES = [
   "session.execution.started",
@@ -33,7 +34,7 @@ export interface OpenCodeStatusSourceOptions {
 
 const SERVICE_CLIENT_FACTORY: OpenCodeClientFactory = {
   async create() {
-    const endpoint = await Service.ensure();
+    const endpoint = await Service.ensure(openCodeServiceOptions());
     return OpenCode.make({
       baseUrl: endpoint.url,
       headers: Service.headers(endpoint),

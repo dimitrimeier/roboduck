@@ -38,6 +38,10 @@ new full synchronization.
 
 - Connects through `@opencode/client` to the local OpenCode service using its
   discovery and authentication mechanism.
+- Reuses or automatically starts the shared background service with
+  `Service.ensure()`. On Windows, the fixed `opencode serve --service` command
+  runs through `ComSpec` (or `cmd.exe`) with AutoRun disabled, so npm `.cmd` shims
+  work without a manually started TUI. Other platforms keep the SDK default.
 - Loads current state at startup and after reconnect.
 - Observes execution, idle, permission, form, and session lifecycle events.
 - Reduces external data to event type, session ID, timestamp, and technically

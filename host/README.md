@@ -31,6 +31,12 @@ npm start
 
 Stop with `Ctrl+C`.
 
+The bridge reuses the local OpenCode background service or starts it automatically
+when needed. You do not need to open the OpenCode TUI first. Windows startup also
+supports the `.cmd` shim from an npm CLI installation; `opencode` must be available
+on the bridge terminal's `PATH`. Stopping the bridge does not stop OpenCode. The
+optional WSL collector remains discovery-only.
+
 ### Windows and WSL together
 
 Native OpenCode sessions in WSL require an **additional, one-time collector
@@ -70,6 +76,12 @@ Bluetooth helper, and start again.
 
 ### Startup troubleshooting
 
+- **`Failed to start server`:** this is the OpenCode connection, not the device
+  connection. Use the current host code, which supports automatic startup through
+  Windows npm shims, and verify `opencode --version` works in the same terminal.
+  `opencode service status` checks the background service. A recognized nested
+  system error is included as `errorCode` (for example, `ENOENT`); nested error
+  messages and credentials are not printed.
 - **`Go was not found` during `build:bluetooth`:** install Go 1.25 or newer and
   ensure `go version` works in the terminal used to build the helper.
 - **`opencode-status-ble.exe ENOENT`:** the Windows Bluetooth helper is missing.

@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-11-17
+Last updated: 2026-11-23
 
 ## Current status
 
@@ -58,6 +58,7 @@ and explicit simultaneous-source priority/recovery tests remain pending.
   collector installation with systemd boot autostart.
 - [x] Documented the additional WSL installation separately, including
   prerequisites, service autostart, verification, maintenance, and troubleshooting.
+- [x] Fixed automatic OpenCode service startup through Windows npm CLI shims.
 
 ## Next steps
 
@@ -88,6 +89,36 @@ and explicit simultaneous-source priority/recovery tests remain pending.
 
 Keep new entries brief. Detailed technical behavior belongs in the relevant
 document.
+
+### 2026-11-23 — Fixed automatic Windows OpenCode startup
+
+- Kept SDK service discovery, authentication, and automatic startup, but use the
+  fixed service command through `ComSpec`/`cmd.exe` with AutoRun disabled on
+  Windows. macOS/Linux defaults and the discovery-only WSL collector are unchanged.
+- Added allowlisted nested system error codes to connection diagnostics without
+  printing cause messages, credentials, paths, or arbitrary code values.
+- Added platform-option and diagnostic tests plus an isolated Windows cold-start,
+  reuse, and recovery test with a fake npm `.cmd` shim in a path containing spaces.
+  No real OpenCode service or hardware is stopped or accessed by these tests.
+- Passed 67 tests, type checking, and build. The updated default adapter also
+  connected to the existing live service and read its event stream/snapshot
+  without hardware access or restarting OpenCode. A full real-service cold start
+  and native macOS validation remain pending.
+
+### 2026-11-23 — Diagnosed Windows OpenCode cold-start failure
+
+- Traced `Failed to start server` to the default `Service.ensure()` call in
+  `@opencode/client` 2.2.7. With this npm-installed Windows CLI, Node's direct
+  `spawn("opencode", ...)` fails with `ENOENT`; version queries through `cmd.exe`
+  and the native executable both succeed.
+- The current OpenCode 2.3.0 service started after the reported failures.
+  Read-only discovery, authenticated API health, and an adapter event-stream/
+  snapshot smoke test against that existing service succeeded. No hardware was
+  accessed and the service was not stopped or restarted during diagnosis.
+- Proposed a Windows-aware launch command while preserving macOS behavior and
+  automatic startup, plus privacy-safe cause codes and startup regression tests.
+  Discovery-only behavior, as used by the WSL collector, is an alternative if
+  automatic startup is not desired. No runtime code was changed.
 
 ### 2026-11-17 — Documented the additional WSL installation
 
