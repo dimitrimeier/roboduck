@@ -9,7 +9,7 @@ import (
 
 const (
 	protocolVersion        = "1"
-	firmwareVersion        = "0.6.5"
+	firmwareVersion        = "0.8.6"
 	lineBufferSize         = 96
 	hostTimeout            = 15 * time.Second
 	batteryADCMax          = 65520
@@ -25,9 +25,15 @@ const (
 	usbThresholdMV         = 4400
 	batteryThird1MV        = 3600
 	batteryThird2MV        = 3900
-	globalOutputMax        = 166 // 65% of 255, rounded to the nearest 8-bit value.
+	globalOutputMax        = 255 // Allow 100% PWM output; resistors limit current.
 	runningOutputMax       = 38  // 15% of 255, rounded down.
-	idleFirstFlashMax      = 51  // 20% of 255.
+	runningPulseMin        = 51  // Keep the dimmer eye at 20% relative brightness.
+	runningGradientSegment = 1600 * time.Millisecond
+	runningAnimationPeriod = 3 * runningGradientSegment
+	idleFirstFlashMax      = 51 // 20% of 255.
+	statusPulsePeriod      = 1600 * time.Millisecond
+	finishedPulseCount     = 3
+	finishedPulseDuration  = finishedPulseCount * statusPulsePeriod
 	// The real board reported 4295 mV while a multimeter measured 4230 mV.
 	supplyCalibrationNumerator   = 4230
 	supplyCalibrationDenominator = 4295
@@ -73,6 +79,11 @@ type rgbColor struct {
 	blue  uint8
 }
 
+type eyeColors struct {
+	left  rgbColor
+	right rgbColor
+}
+
 var (
 	colorOff    = rgbColor{}
 	colorRed    = rgbColor{red: 255}
@@ -87,11 +98,15 @@ var (
 )
 
 type ledRenderer struct {
-	pwm          *machine.PWM
-	redChannel   uint8
-	greenChannel uint8
-	blueChannel  uint8
-	brightness   uint8
+	leftPWM           *machine.PWM
+	leftRedChannel    uint8
+	leftGreenChannel  uint8
+	leftBlueChannel   uint8
+	rightPWM          *machine.PWM
+	rightRedChannel   uint8
+	rightGreenChannel uint8
+	rightBlueChannel  uint8
+	brightness        uint8
 }
 
 func newLEDRenderer() (*ledRenderer, error) {
@@ -100,100 +115,166 @@ func newLEDRenderer() (*ledRenderer, error) {
 	machine.LED.Configure(machine.PinConfig{Mode: machine.PinOutput})
 	machine.LED.Set(false)
 
-	pwm := machine.PWM0
-	if err := pwm.Configure(machine.PWMConfig{Period: uint64(2 * time.Millisecond)}); err != nil {
+	leftPWM := machine.PWM0
+	if err := leftPWM.Configure(machine.PWMConfig{Period: uint64(2 * time.Millisecond)}); err != nil {
+		return nil, err
+	}
+	leftRedChannel, err := leftPWM.Channel(machine.D104)
+	if err != nil {
+		return nil, err
+	}
+	leftGreenChannel, err := leftPWM.Channel(machine.D106)
+	if err != nil {
+		return nil, err
+	}
+	leftBlueChannel, err := leftPWM.Channel(machine.D011)
+	if err != nil {
 		return nil, err
 	}
 
-	redChannel, err := pwm.Channel(machine.D104)
+	rightPWM := machine.PWM1
+	if err := rightPWM.Configure(machine.PWMConfig{Period: uint64(2 * time.Millisecond)}); err != nil {
+		return nil, err
+	}
+	rightRedChannel, err := rightPWM.Channel(machine.D115)
 	if err != nil {
 		return nil, err
 	}
-	greenChannel, err := pwm.Channel(machine.D106)
+	rightGreenChannel, err := rightPWM.Channel(machine.D113)
 	if err != nil {
 		return nil, err
 	}
-	blueChannel, err := pwm.Channel(machine.D011)
+	rightBlueChannel, err := rightPWM.Channel(machine.D111)
 	if err != nil {
 		return nil, err
 	}
 
 	renderer := &ledRenderer{
-		pwm:          pwm,
-		redChannel:   redChannel,
-		greenChannel: greenChannel,
-		blueChannel:  blueChannel,
-		brightness:   96,
+		leftPWM:           leftPWM,
+		leftRedChannel:    leftRedChannel,
+		leftGreenChannel:  leftGreenChannel,
+		leftBlueChannel:   leftBlueChannel,
+		rightPWM:          rightPWM,
+		rightRedChannel:   rightRedChannel,
+		rightGreenChannel: rightGreenChannel,
+		rightBlueChannel:  rightBlueChannel,
+		brightness:        96,
 	}
 	renderer.renderRGB(colorOff)
 	return renderer, nil
 }
 
-func (renderer *ledRenderer) write(channel uint8, level uint8) {
-	top := renderer.pwm.Top()
+func (renderer *ledRenderer) write(pwm *machine.PWM, channel uint8, level uint8) {
+	top := pwm.Top()
 	scaled := uint32(uint64(level) * uint64(renderer.brightness) * globalOutputMax * uint64(top) /
 		(255 * 255 * 255))
-	renderer.pwm.Set(channel, scaled)
+	pwm.Set(channel, scaled)
 }
 
 func (renderer *ledRenderer) renderRGB(color rgbColor) {
-	renderer.write(renderer.redChannel, color.red)
-	renderer.write(renderer.greenChannel, color.green)
-	renderer.write(renderer.blueChannel, color.blue)
+	renderer.renderEyes(eyeColors{left: color, right: color})
 }
 
-func renderStatus(state displayState, now time.Duration) rgbColor {
+func (renderer *ledRenderer) renderEyes(colors eyeColors) {
+	renderer.write(renderer.leftPWM, renderer.leftRedChannel, colors.left.red)
+	renderer.write(renderer.leftPWM, renderer.leftGreenChannel, colors.left.green)
+	renderer.write(renderer.leftPWM, renderer.leftBlueChannel, colors.left.blue)
+	renderer.write(renderer.rightPWM, renderer.rightRedChannel, colors.right.red)
+	renderer.write(renderer.rightPWM, renderer.rightGreenChannel, colors.right.green)
+	renderer.write(renderer.rightPWM, renderer.rightBlueChannel, colors.right.blue)
+}
+
+func mirroredEyes(color rgbColor) eyeColors {
+	return eyeColors{left: color, right: color}
+}
+
+func renderStatus(state displayState, now time.Duration) eyeColors {
 	switch state {
 	case stateOff:
-		return colorOff
+		return mirroredEyes(colorOff)
 	case stateIdle:
-		// Two short green flashes followed by a full three-second pause.
-		const flashOn = 120 * time.Millisecond
-		const flashOff = 120 * time.Millisecond
-		const longPause = 3 * time.Second
-		phase := now % (2*flashOn + flashOff + longPause)
-		if phase < flashOn {
-			return scaleColor(colorGreen, idleFirstFlashMax)
-		}
-		if phase >= flashOn+flashOff && phase < 2*flashOn+flashOff {
-			return colorGreen
-		}
-		return colorOff
+		return idleEyes(now)
 	case stateFinished:
-		return scaleColor(colorGreen, pulseLevel(now))
+		return finishedEyes(now)
 	case stateRunning:
-		return runningGradient(now)
+		return runningEyes(now)
 	case stateAsking:
 		phase := now % time.Second
-		if phase < 120*time.Millisecond {
-			return colorYellow
+		if phase < 500*time.Millisecond {
+			return eyeColors{left: colorRed, right: colorOff}
 		}
-		if phase >= 220*time.Millisecond && phase < 340*time.Millisecond {
-			return colorGreen
-		}
-		return colorOff
+		return eyeColors{left: colorOff, right: colorRed}
 	case stateError:
 		if now%(300*time.Millisecond) < 150*time.Millisecond {
-			return colorRed
+			return mirroredEyes(colorRed)
 		}
-		return colorOff
+		return mirroredEyes(colorOff)
 	}
-	return colorOff
+	return mirroredEyes(colorOff)
+}
+
+func idleEyes(elapsed time.Duration) eyeColors {
+	// Start with a full three-second pause, then show two short green flashes.
+	const flashOn = 120 * time.Millisecond
+	const flashOff = 120 * time.Millisecond
+	const longPause = 3 * time.Second
+	phase := elapsed % (2*flashOn + flashOff + longPause)
+	if phase < longPause {
+		return mirroredEyes(colorOff)
+	}
+	phase -= longPause
+	if phase < flashOn {
+		return mirroredEyes(scaleColor(colorGreen, idleFirstFlashMax))
+	}
+	if phase >= flashOn+flashOff && phase < 2*flashOn+flashOff {
+		return mirroredEyes(colorGreen)
+	}
+	return mirroredEyes(colorOff)
+}
+
+func finishedEyes(elapsed time.Duration) eyeColors {
+	if elapsed < finishedPulseDuration {
+		return mirroredEyes(scaleColor(colorGreen, pulseLevel(elapsed)))
+	}
+	return idleEyes(elapsed - finishedPulseDuration)
 }
 
 func runningGradient(elapsed time.Duration) rgbColor {
-	const segment = 1600 * time.Millisecond
-	const period = 3 * segment
-	phase := elapsed % period
+	phase := elapsed % runningAnimationPeriod
 	var color rgbColor
-	if phase < segment {
-		color = mixColor(colorRunningPink, colorRunningViolet, phase, segment)
-	} else if phase < 2*segment {
-		color = mixColor(colorRunningViolet, colorRunningTurquoise, phase-segment, segment)
+	if phase < runningGradientSegment {
+		color = mixColor(colorRunningPink, colorRunningViolet, phase, runningGradientSegment)
+	} else if phase < 2*runningGradientSegment {
+		color = mixColor(colorRunningViolet, colorRunningTurquoise, phase-runningGradientSegment, runningGradientSegment)
 	} else {
-		color = mixColor(colorRunningTurquoise, colorRunningPink, phase-2*segment, segment)
+		color = mixColor(colorRunningTurquoise, colorRunningPink, phase-2*runningGradientSegment, runningGradientSegment)
 	}
 	return scaleColor(color, runningOutputMax)
+}
+
+func runningEyes(elapsed time.Duration) eyeColors {
+	const halfPeriod = runningAnimationPeriod / 2
+	phase := elapsed % runningAnimationPeriod
+	transfer := phase
+	if phase >= halfPeriod {
+		transfer = runningAnimationPeriod - phase
+	}
+
+	progress := smoothProgress(transfer, halfPeriod)
+	rangeSize := uint16(255 - runningPulseMin)
+	rightLevel := runningPulseMin + uint8(rangeSize*progress/255)
+	leftLevel := 255 - uint8(rangeSize*progress/255)
+	color := runningGradient(elapsed)
+	return eyeColors{
+		left:  scaleColor(color, leftLevel),
+		right: scaleColor(color, rightLevel),
+	}
+}
+
+func smoothProgress(elapsed time.Duration, duration time.Duration) uint16 {
+	// Smoothstep eases the brightness transfer at both ends of the pulse.
+	x := uint64(elapsed) * 255 / uint64(duration)
+	return uint16(x * x * (3*255 - 2*x) / (255 * 255))
 }
 
 func mixColor(from rgbColor, to rgbColor, elapsed time.Duration, duration time.Duration) rgbColor {
@@ -242,6 +323,8 @@ type controller struct {
 	bleNextWrite   time.Time
 	linked         bool
 	lastSeen       time.Time
+	transport      transportTracker
+	resumeStatus   bool
 }
 
 type lineReceiver struct {
@@ -257,7 +340,7 @@ func (device *controller) readSerial() {
 			return
 		}
 		device.serialReceiver.accept(current, writeSerialLine, func(line string) {
-			device.processLine(line, time.Now(), writeSerialLine)
+			device.processLine(line, time.Now(), transportUSB, writeSerialLine)
 		})
 	}
 }
@@ -289,7 +372,7 @@ func (receiver *lineReceiver) accept(current byte, writer responseWriter, proces
 	receiver.length++
 }
 
-func (device *controller) processLine(line string, now time.Time, writer responseWriter) {
+func (device *controller) processLine(line string, now time.Time, source commandTransport, writer responseWriter) {
 	fields := strings.Fields(line)
 	if len(fields) == 0 {
 		return
@@ -334,8 +417,16 @@ func (device *controller) processLine(line string, now time.Time, writer respons
 		}
 		device.touch(now)
 		if device.state != nextState {
+			previousState := device.state
 			device.state = nextState
-			device.stateStarted = now
+			if previousState == stateFinished && nextState == stateIdle &&
+				now.Sub(device.stateStarted) >= finishedPulseDuration {
+				// Continue the idle pause that already began after the third
+				// finished pulse instead of restarting it on the host update.
+				device.stateStarted = device.stateStarted.Add(finishedPulseDuration)
+			} else {
+				device.stateStarted = now
+			}
 		}
 		writer("OK")
 
@@ -359,6 +450,13 @@ func (device *controller) processLine(line string, now time.Time, writer respons
 			return
 		}
 		device.touch(now)
+		if device.transport.completeSync(source) && device.phase == phaseStatus && !device.displayDemo {
+			// Only a completed sync changes the active transport. Standby
+			// handshakes and keepalives must not replay the blue flashes.
+			device.phase = phaseConnectionConfirmed
+			device.phaseStarted = now
+			device.resumeStatus = true
+		}
 		writer("OK")
 
 	case "PING":
@@ -398,13 +496,12 @@ func (device *controller) processLine(line string, now time.Time, writer respons
 			writer("ERROR BAD_ARGUMENTS")
 			return
 		}
-		color := device.displayColor(now)
+		colors := device.displayColors(now)
 		writer("DISPLAY phase=" + device.phase.String() +
 			" battery=" + device.batteryLevel.String() +
 			" supply_mv=" + strconv.FormatUint(uint64(device.supplyMV), 10) +
-			" rgb=" + strconv.FormatUint(uint64(color.red), 10) + "," +
-			strconv.FormatUint(uint64(color.green), 10) + "," +
-			strconv.FormatUint(uint64(color.blue), 10))
+			" left_rgb=" + formatColor(colors.left) +
+			" right_rgb=" + formatColor(colors.right))
 
 	case "DISPLAY_DEMO":
 		if len(fields) != 1 {
@@ -415,6 +512,7 @@ func (device *controller) processLine(line string, now time.Time, writer respons
 		_, _, device.supplyMV = device.readSupply()
 		device.batteryLevel = classifyBattery(device.supplyMV)
 		device.displayDemo = true
+		device.resumeStatus = false
 		device.phase = phaseStartupColors
 		device.phaseStarted = now
 		writer("OK")
@@ -440,6 +538,8 @@ func (device *controller) touch(now time.Time) {
 func (device *controller) expireHost(now time.Time) {
 	if device.linked && now.Sub(device.lastSeen) >= hostTimeout {
 		device.linked = false
+		device.transport = transportTracker{}
+		device.resumeStatus = false
 		device.state = stateOff
 		device.phase = phaseConnecting
 		device.phaseStarted = now
@@ -486,47 +586,55 @@ func (device *controller) updateDisplay(now time.Time) {
 		if now.Sub(device.phaseStarted) >= confirmationDuration {
 			device.phase = phaseStatus
 			device.phaseStarted = now
-			device.stateStarted = now
+			if !device.resumeStatus {
+				device.stateStarted = now
+			}
+			device.resumeStatus = false
 			device.displayDemo = false
 		}
 	}
 
-	device.renderer.renderRGB(device.displayColor(now))
+	device.renderer.renderEyes(device.displayColors(now))
 }
 
-func (device *controller) displayColor(now time.Time) rgbColor {
+func (device *controller) displayColors(now time.Time) eyeColors {
 	elapsed := now.Sub(device.phaseStarted)
 	switch device.phase {
 	case phaseStartupColors:
 		if elapsed < startupGradientSegment {
-			return mixColor(colorRed, colorYellow, elapsed, startupGradientSegment)
+			return mirroredEyes(mixColor(colorRed, colorYellow, elapsed, startupGradientSegment))
 		}
-		return mixColor(colorYellow, colorGreen, elapsed-startupGradientSegment, startupGradientSegment)
+		return mirroredEyes(mixColor(colorYellow, colorGreen, elapsed-startupGradientSegment, startupGradientSegment))
 	case phaseStartupPause, phaseBatteryPause:
-		return colorOff
+		return mirroredEyes(colorOff)
 	case phaseBatteryLevel:
-		return device.batteryLevel.color()
+		return mirroredEyes(device.batteryLevel.color())
 	case phaseConnecting:
-		return scaleColor(colorBlue, pulseLevel(elapsed))
+		return mirroredEyes(scaleColor(colorBlue, pulseLevel(elapsed)))
 	case phaseConnectionConfirmed:
 		if elapsed%(connectFlashOn+connectFlashOff) < connectFlashOn {
-			return colorBlue
+			return mirroredEyes(colorBlue)
 		}
-		return colorOff
+		return mirroredEyes(colorOff)
 	case phaseStatus:
 		return renderStatus(device.state, now.Sub(device.stateStarted))
 	default:
-		return colorOff
+		return mirroredEyes(colorOff)
 	}
 }
 
+func formatColor(color rgbColor) string {
+	return strconv.FormatUint(uint64(color.red), 10) + "," +
+		strconv.FormatUint(uint64(color.green), 10) + "," +
+		strconv.FormatUint(uint64(color.blue), 10)
+}
+
 func pulseLevel(elapsed time.Duration) uint8 {
-	const period = 1600 * time.Millisecond
-	const halfPeriod = period / 2
-	phase := elapsed % period
+	const halfPeriod = statusPulsePeriod / 2
+	phase := elapsed % statusPulsePeriod
 	triangle := phase
 	if phase >= halfPeriod {
-		triangle = period - phase
+		triangle = statusPulsePeriod - phase
 	}
 	return 24 + uint8(231*triangle/halfPeriod)
 }

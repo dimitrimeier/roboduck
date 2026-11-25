@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-11-23
+Last updated: 2026-11-25
 
 ## Current status
 
@@ -18,9 +18,12 @@ been validated on Windows. macOS support uses `serialport` and the same Go BLE
 helper through CoreBluetooth; native macOS build, automated tests, and physical
 hardware validation remain pending.
 
-Firmware 0.6.5 drives the first external RGB eye using hardware PWM. The startup
-self-test, supply indication, connection sequence, mixed-color running fade,
-asking flashes, finished pulse, and idle double flash have been visually tested.
+Firmware 0.8.6 builds on the deployed 0.8.5 two-eye firmware: six independent
+PWM channels, opposing `RUNNING` brightness, alternating red `ASKING`, and
+three-pulse `FINISHED`. It raises the global output cap to 100% and replays the
+blue connection flashes on successful USB/BLE handovers. Host brightness and
+relative animation dimming remain unchanged. The TinyGo build succeeded; firmware upload and physical validation of
+0.8.6 remain pending.
 
 An optional native WSL collector now starts as a lingering systemd user service
 and relays reduced session state to the manually started Windows bridge through
@@ -59,6 +62,8 @@ and explicit simultaneous-source priority/recovery tests remain pending.
 - [x] Documented the additional WSL installation separately, including
   prerequisites, service autostart, verification, maintenance, and troubleshooting.
 - [x] Fixed automatic OpenCode service startup through Windows npm CLI shims.
+- [x] Raised the global firmware PWM cap from 65% to 100%.
+- [x] Added transport-aware blue confirmation after full sync on a new source.
 
 ## Next steps
 
@@ -89,6 +94,18 @@ and explicit simultaneous-source priority/recovery tests remain pending.
 
 Keep new entries brief. Detailed technical behavior belongs in the relevant
 document.
+
+### 2026-11-25 — Full brightness range and handover confirmation
+
+- Verified that the attached board runs firmware 0.8.5 with two RGB eyes.
+- Raised the global PWM cap to 255/255 without changing configured host
+  brightness or relative status dimming.
+- Track completed USB/BLE full syncs and replay three blue flashes on handover,
+  without standby-triggered flashes or restarting the status animation timer.
+- Passed all three hardware-independent transport-selection tests, all 67 host
+  tests, and host type checking. Built the 184,320-byte UF2 with TinyGo 0.44.0
+  and Go 1.27.4; the build output is ignored by Git.
+- Firmware upload and real USB/BLE handover validation remain pending.
 
 ### 2026-11-23 — Fixed automatic Windows OpenCode startup
 

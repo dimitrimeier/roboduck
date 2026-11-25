@@ -3,6 +3,24 @@
 This file records accepted technical decisions. New entries should include a
 date, status, decision, and rationale.
 
+## 2026-11-25 — Full PWM range and transport handover confirmation
+
+**Status:** Accepted; 100% supersedes the 65% global output limit
+
+Firmware 0.8.6 permits 255/255 PWM output on all six RGB channels. The host's
+configured brightness and the 15% relative `RUNNING` limit remain unchanged;
+the channel resistors must limit current safely at full duty.
+
+Track the transport that completes `SYNC_COMPLETE`. A subsequent full sync on
+the other transport replays the existing three blue flashes for 720 ms on both
+eyes, then resumes status without restarting its animation timer. Ignore
+standby handshakes/pings and same-transport resync for this indication. Keep
+startup/demo sequences intact and clear transport history on watchdog expiry.
+
+**Rationale:** The host already synchronizes on USB failback and BLE failover.
+Using that signal confirms a working status transport without new protocol
+commands, power-voltage heuristics, or treating BLE standby as active.
+
 ## 2026-11-23 — Windows-compatible automatic OpenCode service startup
 
 **Status:** Accepted

@@ -83,7 +83,7 @@ func (device *controller) readBluetooth() {
 		current := device.bleIncoming[device.bleIncomingGet]
 		device.bleIncomingGet = (device.bleIncomingGet + 1) % uint8(len(device.bleIncoming))
 		device.bleReceiver.accept(current, device.queueBluetoothLine, func(line string) {
-			device.processLine(line, time.Now(), device.queueBluetoothLine)
+			device.processLine(line, time.Now(), transportBLE, device.queueBluetoothLine)
 		})
 	}
 }

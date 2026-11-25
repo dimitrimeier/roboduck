@@ -121,6 +121,13 @@ disconnect, the coordinator activates BLE and performs a full synchronization.
 After USB reconnect and synchronization, USB becomes active again and BLE
 returns to standby. Diagnostic modes `usb` and `bluetooth` remain available.
 
+Firmware tracks the source of valid `SYNC_COMPLETE` commands. A completed sync
+on a different active transport replays the three blue connection flashes;
+standby handshakes and keepalives do not change the active source. The initial
+sync uses the existing startup confirmation, and watchdog expiry clears
+transport history. Cable insertion/removal is confirmed by the host's actual
+failback/failover, not inferred from battery voltage or USB power alone.
+
 ## Device protocol
 
 USB and BLE use the same versioned, line-oriented text protocol. BLE fragments
@@ -128,7 +135,7 @@ long lines into GATT packets transparently.
 
 ```text
 HOST -> HELLO 1
-MCU  -> DEVICE OPENCODE_STATUS protocol=1 firmware=0.6.5 leds=1
+MCU  -> DEVICE OPENCODE_STATUS protocol=1 firmware=0.8.6 leds=1
 HOST -> RESET_STATE
 MCU  -> OK
 HOST -> BRIGHTNESS 128
@@ -162,7 +169,7 @@ OK
 PONG
 BATTERY raw=<n> adc_mv=<n> source_mv=<n>
 SUPPLY raw=<n> adc_mv=<n> supply_mv=<n>
-DISPLAY phase=<phase> battery=<level> supply_mv=<n> rgb=<r>,<g>,<b>
+DISPLAY phase=<phase> battery=<level> supply_mv=<n> left_rgb=<r>,<g>,<b> right_rgb=<r>,<g>,<b>
 ERROR <code>
 ```
 
@@ -178,17 +185,26 @@ line length and applies bounded timeouts.
 
 Before rendering host state, the non-blocking firmware renderer runs a
 red-yellow-green self-test, battery indication, blue connection pulse, and
-connection confirmation flashes. `DISPLAY` exposes the rendered RGB value for
+connection confirmation flashes. `DISPLAY` exposes both rendered RGB values for
 diagnostics; `DISPLAY_DEMO` safely replays the phases.
 
-Since firmware 0.5.0, the first common-cathode RGB eye uses hardware PWM on
-`D104`/`P1.04` (red), `D106`/`P1.06` (green), and `D011`/`P0.11` (blue). Its
-cathode is connected to GND. The internal red LED at `P0.15` is disabled. A
-second eye will require separate pins and another PWM peripheral.
+The left common-cathode RGB eye uses `PWM0` on `D104`/`P1.04` (red),
+`D106`/`P1.06` (green), and `D011`/`P0.11` (blue). The right eye uses `PWM1` on
+`D115`/`P1.15` (red), `D113`/`P1.13` (green), and `D111`/`P1.11` (blue). Both
+cathodes connect to GND. `RUNNING` keeps its color gradient and adds opposing
+per-eye brightness modulation. `ASKING` alternates red/off between the eyes
+every 500 ms. Other phases remain mirrored. The internal red LED is disabled.
+
+The host remains authoritative for the logical `FINISHED` timeout. The firmware
+renders three 1.6-second green pulses, then reuses the normal `IDLE` renderer,
+starting with its three-second dark pause. A subsequent host transition to
+`IDLE` preserves that pause. Transport confirmation flashes temporarily replace
+the status display for 720 ms without restarting its animation timer.
 
 Color, configured brightness, and a fixed global output limit are multiplied
-before PWM output. Since firmware 0.6.2 the global limit is approximately 65%.
-Resistors remain the electrical current limit.
+before PWM output. Firmware 0.8.6 raises the global limit from approximately
+65% to 100%. Host brightness and the 15% relative `RUNNING` limit remain in
+effect. Resistors remain the electrical current limit at full PWM duty.
 
 ## Reset and recovery
 

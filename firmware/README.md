@@ -1,10 +1,11 @@
 # Firmware
 
-Firmware 0.6.5 supports USB CDC and Bluetooth LE concurrently on the tested
+Firmware 0.8.6 supports USB CDC and Bluetooth LE concurrently on the tested
 nice!nano-v2-compatible Pro Micro nRF52840 board. Both transports use the same
 status protocol. The programmable internal red LED at `P0.15` is disabled. The
-first external common-cathode RGB eye is driven by three hardware PWM channels;
-a planned second eye is mirrored logically but not yet connected.
+two external common-cathode RGB eyes are driven by six separate hardware PWM
+channels. `RUNNING` and `ASKING` use independent per-eye animations; other
+phases mirror one logical display.
 
 ## Tested hardware
 
@@ -24,10 +25,10 @@ controlled as a normal GPIO status LED. Its blinking is unrelated to Bluetooth.
 | State | Pattern |
 |---|---|
 | `OFF` | Off |
-| `IDLE` | Short green at 20%, short green at full globally limited brightness, then 3 s off |
-| `FINISHED` | Green pulse |
-| `RUNNING` | Warm pink → violet → turquoise-green fade at 15% relative brightness |
-| `ASKING` | Yellow flash followed by green flash |
+| `IDLE` | 3 s off, short green at 20%, then short green at full configured brightness |
+| `FINISHED` | Exactly three green pulses, then the unchanged idle double-flash pattern |
+| `RUNNING` | Warm pink → violet → turquoise-green fade at 15% relative brightness, with a slow, opposing per-eye brightness pulse |
+| `ASKING` | Alternating red blink: first eye for 500 ms, then second eye for 500 ms |
 | `ERROR` | Fast red blink |
 
 The internal red board LED remains off in every phase.
@@ -45,6 +46,14 @@ The renderer is non-blocking:
 5. Blue pulses until a valid `HELLO 1` arrives over USB or BLE.
 6. Three short blue flashes confirm connection.
 7. The normal status pattern begins.
+
+When the host completes a full synchronization over a different active transport,
+the three blue flashes replay on both eyes (720 ms total), then the current
+status animation resumes without restarting its timer. This confirms BLE → USB
+after plugging in the cable and USB → BLE after unplugging it, provided the host
+bridge runs in `both` mode and BLE remains available. Standby `HELLO`/`PING`
+commands and repeated synchronization on the same transport do not replay them.
+Startup and `DISPLAY_DEMO` sequences are not interrupted by transport changes.
 
 After 15 seconds without host activity, stale status is discarded and the blue
 connection pulse returns. Battery thresholds are preliminary coarse levels, not
@@ -96,7 +105,7 @@ DISPLAY_DEMO
 Example handshake response:
 
 ```text
-DEVICE OPENCODE_STATUS protocol=1 firmware=0.6.5 leds=1
+DEVICE OPENCODE_STATUS protocol=1 firmware=0.8.6 leds=1
 ```
 
 Commands are limited to 95 bytes excluding the line ending. Unknown or invalid
@@ -131,7 +140,7 @@ boards and should not be treated as universal calibration.
 protocol output:
 
 ```text
-DISPLAY phase=CONNECTING battery=HIGH supply_mv=4230 rgb=0,0,147
+DISPLAY phase=CONNECTING battery=HIGH supply_mv=4230 left_rgb=0,0,147 right_rgb=0,0,147
 ```
 
 `DISPLAY_DEMO` restarts the diagnostic sequence and keeps connection search
@@ -173,10 +182,17 @@ Both scripts pre-filter by the validated USB application identifier and require
 the handshake before issuing commands. They contain no fixed COM port. Visual
 appearance must still be confirmed by a person.
 
+The transport-selection unit tests run without hardware or TinyGo. From
+`firmware/`:
+
+```sh
+go test transport.go transport_test.go
+```
+
 ## RGB wiring
 
-Two four-pin common-cathode RGB LEDs are planned. Six separate PWM channels and
-six separate resistors are required to allow later independent control. The
+Two four-pin common-cathode RGB LEDs use six separate PWM channels and
+six separate resistors for independent control. The
 cathodes connect to ground. Final resistors and source drivers must be selected
 after measuring forward voltage. The intended final point is 10 mA per channel;
 the nRF52840 GPIOs should provide PWM control signals rather than directly
@@ -191,7 +207,23 @@ Current first-eye prototype:
 | Blue | `D011` / `011` | `P0.11` | GPIO → resistor → blue anode |
 | Common | `GND` | Ground | Common cathode |
 
-The three channels use `PWM0` with a 2 ms period and are not inverted. Firmware
-globally limits physical output to 166/255 (about 65%); resistors remain the
-actual current limit. This direct prototype intentionally operates below the
-planned 10 mA and is not the final electrical design.
+Current second-eye prototype wiring:
+
+| Channel | Board pin | nRF52840 | Connection |
+|---|---|---|---|
+| Red | `D115` / `115` | `P1.15` | GPIO → resistor → red anode |
+| Green | `D113` / `113` | `P1.13` | GPIO → resistor → green anode |
+| Blue | `D111` / `111` | `P1.11` | GPIO → resistor → blue anode |
+| Common | `GND` | Ground | Common cathode |
+
+The first eye uses `PWM0`, and the second uses `PWM1`. The protocol still reports
+`leds=1` because it exposes one aggregate status display rather than per-eye
+commands. Both eyes were physically validated with firmware 0.7.0; the user
+confirmed matching startup and connection sequences.
+
+All six channels use a 2 ms period and are not inverted. Firmware 0.8.6 permits
+255/255 (100%) physical PWM output, superseding the previous 65% global cap.
+The host's `BRIGHTNESS` setting still scales every phase (default `128`), and
+`RUNNING` retains its additional 15% relative limit. Resistors must safely limit
+current at full PWM duty; this direct-GPIO prototype is not the final 10 mA
+electrical design.
