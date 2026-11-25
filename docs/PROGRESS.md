@@ -64,6 +64,16 @@ and explicit simultaneous-source priority/recovery tests remain pending.
 - [x] Fixed automatic OpenCode service startup through Windows npm CLI shims.
 - [x] Raised the global firmware PWM cap from 65% to 100%.
 - [x] Added transport-aware blue confirmation after full sync on a new source.
+- [x] Reserved `D115`, `D113`, and `D111` on `PWM1` for the independently wired
+  second RGB eye.
+- [x] Added mirrored second-eye output through `PWM1` in firmware 0.7.0.
+- [x] Added alternating yellow per-eye `ASKING` output in firmware 0.8.0.
+- [x] Added an opposing per-eye `RUNNING` brightness pulse in firmware 0.8.1.
+- [x] Limited `FINISHED` to three pulses before the idle pattern in firmware
+  0.8.2.
+- [x] Replaced the green/off `ASKING` counterpart with red in firmware 0.8.3.
+- [x] Corrected `ASKING` to a fixed-color alternating blink in firmware 0.8.4.
+- [x] Changed `ASKING` to alternate red on both eyes in firmware 0.8.5.
 
 ## Next steps
 
@@ -136,6 +146,68 @@ document.
   automatic startup, plus privacy-safe cause codes and startup regression tests.
   Discovery-only behavior, as used by the WSL collector, is an alternative if
   automatic startup is not desired. No runtime code was changed.
+
+### 2026-11-18 — Red-only ASKING blink
+
+- Replaced the second eye's yellow/green appearance with red during `ASKING`.
+- Kept the 500 ms alternating blink and switched the inactive eye off.
+- Built and flashed firmware 0.8.5, confirmed its USB handshake, and verified
+  both red/off half-cycles through separate left/right RGB diagnostics.
+- Restarted the host bridge; physical visual validation remains open.
+
+### 2026-11-18 — Corrected ASKING blink
+
+- Assigned red permanently to the first eye and yellow to the second eye during
+  `ASKING`.
+- Alternated the active eye every 500 ms and switched the inactive eye off.
+- Built and flashed firmware 0.8.4, confirmed its USB handshake, and verified
+  both ASKING half-cycles through separate left/right RGB diagnostics.
+- Restarted the host bridge; physical visual validation remains open.
+
+### 2026-11-18 — Yellow/red ASKING swap
+
+- Changed `ASKING` to show yellow on one eye and red on the other.
+- Reversed the two colors every 500 ms without changing the one-second cycle.
+- Built and flashed firmware 0.8.3, confirmed its USB handshake, and restarted
+  the host bridge. Physical visual validation remains open.
+
+### 2026-11-18 — Three-pulse FINISHED animation
+
+- Kept the existing 1.6-second green pulse and limited `FINISHED` to three full
+  cycles.
+- Reused the idle renderer after 4.8 seconds, with its three-second pause first,
+  while leaving logical state ownership with the host.
+- Preserved the running idle pause when the host subsequently confirms the
+  logical transition to `IDLE`.
+- Built and flashed firmware 0.8.2, confirmed its USB handshake, and restarted
+  the host bridge. Physical visual validation remains open.
+
+### 2026-11-18 — Per-eye RUNNING brightness pulse
+
+- Preserved the existing 4.8-second RUNNING color gradient.
+- Added an eased opposing brightness pulse over the same cycle, ranging from 20%
+  to 100% of the existing RUNNING level on each eye.
+- Built and flashed firmware 0.8.1, confirmed its USB handshake, and restarted
+  the host bridge. Physical visual validation remains open.
+
+### 2026-11-18 — Alternating ASKING pattern
+
+- Changed `ASKING` to a continuous one-second cycle: left eye yellow for 500 ms,
+  then right eye yellow for 500 ms.
+- Kept all other display phases mirrored and extended `DISPLAY` diagnostics with
+  separate left/right RGB values.
+- Firmware build validation succeeded; physical visual validation remains open.
+
+### 2026-11-18 — Reserved second RGB eye wiring
+
+- Assigned `D115`/`P1.15` to red, `D113`/`P1.13` to green, and `D111`/`P1.11`
+  to blue, with the common cathode on ground.
+- Kept three separate resistors and reserved `PWM1` so both eyes remain
+  independently controllable.
+- The user soldered the second common-cathode RGB LED with matching resistors.
+- Firmware 0.7.0 mirrors the first eye on `PWM1`; build, flash, handshake, full
+  display diagnostic, and visual validation of identical output on both eyes
+  succeeded on the physical board.
 
 ### 2026-11-17 — Documented the additional WSL installation
 

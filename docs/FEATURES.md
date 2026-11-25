@@ -29,19 +29,25 @@
 
 ### LED display
 
-- Two RGB eyes are planned and initially mirror each other.
-- Wiring should allow independent control later.
+- Two RGB eyes mirror each other except for per-eye `RUNNING` and `ASKING` patterns.
+- Separate PWM channels allow independent rendering where a pattern requires it.
 - Startup: a 2.2-second red-to-yellow-to-green fade, 500 ms off, 1.5 seconds of
   battery color, and one second off.
 - USB power prevents battery measurement on the tested board, so yellow means
   “unknown” in that case.
 - Until host handshake: blue pulse; after handshake: three short blue flashes.
+- Successful USB/BLE transport handovers replay the three blue flashes on both
+  eyes; standby handshakes and keepalives do not trigger them.
+- Maximum physical PWM output is 100%; configured host brightness still applies.
 - `RUNNING`: warm pink, violet, and turquoise-green fade at 15% relative
-  brightness; pure primary colors are avoided.
-- `ASKING`: yellow and green double flash.
-- `FINISHED`: green pulse for at most five seconds before `IDLE`.
-- `IDLE`: one short green flash at 20%, one at full globally limited brightness,
-  then a three-second pause.
+  brightness, with brightness transferring smoothly between the eyes over a
+  4.8-second cycle. The dimmer eye remains at least 20% of that level.
+- `ASKING`: the first eye blinks red for 500 ms, followed by the second eye in
+  red for 500 ms; the inactive eye remains off.
+- `FINISHED`: exactly three green pulses over 4.8 seconds, followed by the
+  unchanged `IDLE` double-flash pattern.
+- `IDLE`: a three-second pause, one short green flash at 20%, then one at full
+  configured brightness.
 - The internal red board LED remains disabled.
 
 Aggregate status priority:
